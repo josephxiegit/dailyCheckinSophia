@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "types": [
+      "vite/client",
+      "@dcloudio/types",
+      "@mini-types/alipay",
+      "miniprogram-api-typings",
+      "@uni-helper/uni-types",
+      "uview-pro/types"
+    ]
+  },
+  "vueCompilerOptions": {
+    "plugins": [
+      "@uni-helper/uni-types/volar-plugin"
+    ]
+  }
+}
