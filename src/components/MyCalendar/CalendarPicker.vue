@@ -1,6 +1,6 @@
 <template>
-  <view class="calendar-container">
-    <view class="header">
+  <view class="calendar-container" :class="{ 'wide-calendar': wide }">
+    <view class="header" :style="headerStyle">
       <view class="month-selector">
         <u-icon name="arrow-left" @click="changeMonth(-1)"></u-icon>
         <text class="current-month">{{ currentYear }}年{{ currentMonth }}月</text>
@@ -29,7 +29,9 @@
         <view v-if="item.holidayStatus === 'rest' && item.isCurrentMonth" class="rest-tag">休</view>
         <view v-if="item.holidayStatus === 'work' && item.isCurrentMonth" class="work-tag">上学</view>
 
-        <view v-if="item.hasRecord && item.isCurrentMonth" class="record-dot"></view>
+        <!-- 部分完成显示蓝点，否则完全完成显示红点 -->
+        <view v-if="item.isPartial && item.isCurrentMonth" class="partial-dot"></view>
+        <view v-else-if="item.hasRecord && item.isCurrentMonth" class="record-dot"></view>
       </view>
     </view>
   </view>
@@ -40,7 +42,9 @@ import { ref, computed, watch, onMounted } from 'vue';
 
 const props = defineProps({
   modelValue:  { type: Date, required: true },
-  recordDates: { type: Object, default: () => new Set() }
+  recordDates: { type: Object, default: () => new Set() },
+  partialDates: { type: Set, default: () => new Set() },   // 新增：部分完成日期
+  wide:        { type: Boolean, default: false }           // 新增：宽屏标记
 });
 const emit = defineEmits(['update:modelValue', 'month-change']);
 
@@ -49,6 +53,7 @@ const holidayDict  = ref({});
 
 const currentYear  = computed(() => displayDate.value.getFullYear());
 const currentMonth = computed(() => displayDate.value.getMonth() + 1);
+const headerStyle = ref({});
 
 const isSameDay = (d1, d2) => {
   if (!d1 || !d2) return false;
@@ -72,7 +77,8 @@ const createDayObject = (date, isCurrentMonth) => {
     isCurrentMonth,
     isToday:       isSameDay(date, new Date()),
     holidayStatus: holidayDict.value[ds] || null,
-    hasRecord:     props.recordDates.has(ds)
+    hasRecord:     props.recordDates.has(ds),
+    isPartial:     props.partialDates.has(ds)    // 新增
   };
 };
 
@@ -153,11 +159,25 @@ const HOLIDAY_DATA = {
 
 onMounted(() => {
   holidayDict.value = HOLIDAY_DATA;
+  const systemInfo = typeof uni.getSystemInfoSync === 'function'
+    ? uni.getSystemInfoSync()
+    : {};
+  const menuButton = typeof uni.getMenuButtonBoundingClientRect === 'function'
+    ? uni.getMenuButtonBoundingClientRect()
+    : null;
+
+  if (menuButton && systemInfo.windowWidth) {
+    const capsuleRightGap = systemInfo.windowWidth - menuButton.right;
+    const paddingRight = menuButton.width + capsuleRightGap * 2;
+    headerStyle.value = { paddingRight: `${paddingRight}px` };
+  } else {
+    headerStyle.value = {};
+  }
 });
 </script>
 
 <style lang="scss" scoped>
-.calendar-container { padding: 20rpx; background: #fff; border-radius: 24rpx; }
+.calendar-container { padding: 20rpx; padding-top: calc(var(--status-bar-height) + 20rpx); background: #fff; border-radius: 24rpx; }
 .header { display: flex; justify-content: space-between; padding: 20rpx; }
 .month-selector { display: flex; align-items: center; gap: 20rpx; font-weight: bold; }
 .today-btn {
@@ -190,5 +210,69 @@ onMounted(() => {
   position: absolute; top: 5rpx; right: 5rpx;
   font-size: 18rpx; color: #FF9500;
   .is-selected & { color: #fff; }
+}
+
+/* 部分完成蓝色圆点 */
+.partial-dot {
+  position: absolute; bottom: 8rpx; left: 50%; transform: translateX(-50%);
+  width: 10rpx; height: 10rpx; border-radius: 50%; background: #007AFF;
+  .is-selected & { background: #fff; }
+}
+
+/* 宽屏日历放大 */
+.wide-calendar {
+  width: 100%;
+  height: 100%;
+  padding: 28px 30px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  .header {
+    padding: 0 0 22px;
+    flex-shrink: 0;
+  }
+
+  .current-month {
+    font-size: 28px;
+  }
+
+  .today-btn {
+    font-size: 15px;
+    padding: 8px 18px;
+  }
+
+  .days-grid {
+    flex: 1;
+    min-height: 0;
+    gap: 12px;
+  }
+
+  .day-cell {
+    height: auto;
+    min-height: clamp(72px, 8.2vw, 128px);
+    border-radius: 12px;
+    font-size: clamp(22px, 2vw, 32px);
+  }
+
+  .weekdays {
+    font-size: 15px;
+    padding: 0 0 14px;
+    flex-shrink: 0;
+  }
+
+  .rest-tag,
+  .work-tag {
+    top: 8px;
+    right: 8px;
+    font-size: 13px;
+  }
+
+  .record-dot,
+  .partial-dot {
+    width: 8px;
+    height: 8px;
+    bottom: 10px;
+  }
 }
 </style>
