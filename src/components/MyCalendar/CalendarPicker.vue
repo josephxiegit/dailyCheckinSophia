@@ -6,7 +6,10 @@
         <text class="current-month">{{ currentYear }}年{{ currentMonth }}月</text>
         <u-icon name="arrow-right" @click="changeMonth(1)"></u-icon>
       </view>
-      <view class="today-btn" @click="goToday">回到当天</view>
+      <view class="action-btns">
+        <view class="today-btn" @click="goToday">回到当天</view>
+        <view class="range-btn" @click="openRangeViewer">区间记录</view>
+      </view>
     </view>
 
     <view class="weekdays">
@@ -29,7 +32,6 @@
         <view v-if="item.holidayStatus === 'rest' && item.isCurrentMonth" class="rest-tag">休</view>
         <view v-if="item.holidayStatus === 'work' && item.isCurrentMonth" class="work-tag">上学</view>
 
-        <!-- 部分完成显示蓝点，否则完全完成显示红点 -->
         <view v-if="item.isPartial && item.isCurrentMonth" class="partial-dot"></view>
         <view v-else-if="item.hasRecord && item.isCurrentMonth" class="record-dot"></view>
       </view>
@@ -43,10 +45,12 @@ import { ref, computed, watch, onMounted } from 'vue';
 const props = defineProps({
   modelValue:  { type: Date, required: true },
   recordDates: { type: Object, default: () => new Set() },
-  partialDates: { type: Set, default: () => new Set() },   // 新增：部分完成日期
-  wide:        { type: Boolean, default: false }           // 新增：宽屏标记
+  partialDates: { type: Set, default: () => new Set() },
+  wide:        { type: Boolean, default: false }
 });
-const emit = defineEmits(['update:modelValue', 'month-change']);
+
+// 新增 'open-range-viewer' 事件
+const emit = defineEmits(['update:modelValue', 'month-change', 'open-range-viewer']);
 
 const displayDate  = ref(new Date());
 const holidayDict  = ref({});
@@ -78,7 +82,7 @@ const createDayObject = (date, isCurrentMonth) => {
     isToday:       isSameDay(date, new Date()),
     holidayStatus: holidayDict.value[ds] || null,
     hasRecord:     props.recordDates.has(ds),
-    isPartial:     props.partialDates.has(ds)    // 新增
+    isPartial:     props.partialDates.has(ds)
   };
 };
 
@@ -120,7 +124,11 @@ const goToday = () => {
   emit('update:modelValue', today);
 };
 
-// 切换月份时通知父组件去拉数据
+// 新增：点击触发父组件方法
+const openRangeViewer = () => {
+  emit('open-range-viewer');
+};
+
 watch([currentYear, currentMonth], ([year, month]) => {
   emit('month-change', { year, month });
 });
@@ -140,7 +148,7 @@ const HOLIDAY_DATA = {
   '2026-10-01': 'rest', '2026-10-02': 'rest', '2026-10-03': 'rest',
   '2026-10-04': 'rest', '2026-10-05': 'rest', '2026-10-06': 'rest',
   '2026-10-07': 'rest', '2026-10-10': 'work',
-  // 2025年（切换到去年月份时用）
+  // 2025年
   '2025-01-01': 'rest',
   '2025-01-28': 'rest', '2025-01-29': 'rest', '2025-01-30': 'rest',
   '2025-01-31': 'rest', '2025-02-01': 'rest', '2025-02-02': 'rest',
@@ -180,10 +188,25 @@ onMounted(() => {
 .calendar-container { padding: 20rpx; padding-top: calc(var(--status-bar-height) + 20rpx); background: #fff; border-radius: 24rpx; }
 .header { display: flex; justify-content: space-between; padding: 20rpx; }
 .month-selector { display: flex; align-items: center; gap: 20rpx; font-weight: bold; }
+
+/* 新增：右侧按钮组容器 */
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 16rpx; /* 控制两个按钮的间距 */
+}
+
 .today-btn {
   color: #FF2D55; font-size: 24rpx;
   background: #fff1f2; padding: 8rpx 20rpx; border-radius: 20rpx;
 }
+
+/* 新增：区间记录按钮样式（配色微调以区分主次） */
+.range-btn {
+  color: #007AFF; font-size: 24rpx;
+  background: #e5f1ff; padding: 8rpx 20rpx; border-radius: 20rpx;
+}
+
 .weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr);
   text-align: center; color: #999; font-size: 24rpx; padding: 20rpx 0;
@@ -223,10 +246,12 @@ onMounted(() => {
 .wide-calendar {
   width: 100%;
   height: 100%;
+  min-height: 0;
   padding: 28px 30px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 
   .header {
     padding: 0 0 22px;
@@ -237,7 +262,8 @@ onMounted(() => {
     font-size: 28px;
   }
 
-  .today-btn {
+  .today-btn,
+  .range-btn {
     font-size: 15px;
     padding: 8px 18px;
   }
@@ -245,14 +271,15 @@ onMounted(() => {
   .days-grid {
     flex: 1;
     min-height: 0;
-    gap: 12px;
+    gap: 10px;
+    grid-template-rows: repeat(6, minmax(0, 1fr));
   }
 
   .day-cell {
-    height: auto;
-    min-height: clamp(72px, 8.2vw, 128px);
+    height: 100%;
+    min-height: 0;
     border-radius: 12px;
-    font-size: clamp(22px, 2vw, 32px);
+    font-size: clamp(20px, 1.7vw, 30px);
   }
 
   .weekdays {

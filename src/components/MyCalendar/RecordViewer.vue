@@ -1,14 +1,8 @@
 <template>
   <view>
-    <!-- 入口按钮 -->
-    <view class="viewer-btn" @click="openPicker">
-      <text class="viewer-btn-text">📋 查看区间记录</text>
-    </view>
-
-    <!-- 第 1 步：日期选择弹窗 -->
     <transition name="modal-anim">
       <view v-if="showPicker" class="overlay" :class="{'wide-overlay': isWide}" @click="showPicker = false">
-        <view class="popup-box" :class="isWide ? 'drawer-left' : 'popup-bottom'" @click.stop>
+        <view class="popup-box" :class="[isWide ? 'drawer-left' : 'popup-bottom', 'range-picker-box']" @click.stop>
           
           <view class="popup-title">选择日期范围</view>
 
@@ -26,10 +20,22 @@
             </picker>
           </view>
 
-          <view v-if="savedStart && savedEnd" class="saved-row" @click="useSavedAndFetch">
+          <view
+            v-if="savedStart && savedEnd"
+            class="saved-row"
+            @click="onSavedRowClick"
+            @touchstart="onSavedRowTouchStart"
+            @touchend="onSavedRowTouchEnd"
+          >
             <view class="saved-info">
-              <text class="saved-label">⭐ 常用：</text>
-              <text class="saved-dates">{{ savedStart }} 至 {{ savedEnd }}</text>
+              <view class="saved-main">
+                <text class="saved-label">⭐ 常用：</text>
+                <text class="saved-dates">{{ savedStart }} 至 {{ savedEnd }}</text>
+              </view>
+              <view v-if="savedAmountDisplay || savedStatusLabel" class="saved-meta">
+                <text v-if="savedAmountDisplay" class="saved-meta-text">金额：{{ savedAmountDisplay }}</text>
+                <text v-if="savedStatusLabel" class="saved-status" :class="savedStatusClass">{{ savedStatusLabel }}</text>
+              </view>
             </view>
             <view class="saved-btn-quick">直接查询</view>
           </view>
@@ -43,7 +49,6 @@
       </view>
     </transition>
 
-    <!-- 第 2 步：免除项选择弹窗 -->
     <transition name="modal-anim">
       <view v-if="showExclusionPicker" class="overlay" :class="{'wide-overlay': isWide}" @click="showExclusionPicker = false">
         <view class="popup-box" :class="isWide ? 'drawer-left' : 'popup-bottom'" @click.stop>
@@ -72,13 +77,12 @@
       </view>
     </transition>
 
-    <!-- 第 3 步：结果列表弹窗 -->
     <transition name="modal-anim">
       <view v-if="showResult" class="overlay" :class="{'wide-overlay': isWide}" @click="showResult = false">
-        <view class="popup-box result-box" :class="isWide ? 'drawer-left' : 'popup-bottom'" @click.stop>
+        <view class="popup-box result-box" :class="isWide ? 'drawer-left result-drawer-left' : 'popup-bottom'" @click.stop>
           
           <view class="popup-title">
-            <text>{{ startDate }} 至 {{ endDate }}</text>
+            <text class="result-title-range">{{ startDate }} 至 {{ endDate }}</text>
             <text class="result-count">共 {{ records.length }} 天</text>
           </view>
           
@@ -108,34 +112,37 @@
             >
               <view class="record-date">
                 📅 {{ r.date }}
-                <text v-if="!r.reading_start && !r.math_title && !r.class_title" class="no-record-badge">
-                  {{ (isExcluded(r.date, 'reading') && isExcluded(r.date, 'math') && isExcluded(r.date, 'class')) ? '已全免除' : '未录入' }}
+                <text
+                  v-if="!hasActualRecord(r, 'reading') && !hasActualRecord(r, 'math') && !hasActualRecord(r, 'class')"
+                  class="no-record-badge"
+                >
+                  {{ isExcludedOrExempt(r, 'reading') && isExcludedOrExempt(r, 'math') && isExcludedOrExempt(r, 'class') ? '已全免除' : '未录入' }}
                 </text>
               </view>
 
               <view class="record-row">
                 <text class="record-tag">📖 阅读</text>
-                <text v-if="r.reading_start" class="record-val">第 {{ r.reading_start }} - {{ r.reading_end }} 页</text>
+                <text v-if="hasActualRecord(r, 'reading')" class="record-val">第 {{ r.reading_start }} - {{ r.reading_end }} 页</text>
                 <text v-else class="record-val empty-val">
-                  <text v-if="isExcluded(r.date, 'reading')" style="color: #34C759;">✅ 已免除</text>
+                  <text v-if="isExcludedOrExempt(r, 'reading')" style="color: #34C759;">✅ 已免除</text>
                   <text v-else>—</text>
                 </text>
               </view>
 
               <view class="record-row">
                 <text class="record-tag">🔢 数学</text>
-                <text v-if="r.math_title" class="record-val">{{ r.math_title }}（{{ r.math_min }}分{{ r.math_sec }}秒）</text>
+                <text v-if="hasActualRecord(r, 'math')" class="record-val">{{ r.math_title }}（{{ r.math_min }}分{{ r.math_sec }}秒）</text>
                 <text v-else class="record-val empty-val">
-                  <text v-if="isExcluded(r.date, 'math')" style="color: #34C759;">✅ 已免除</text>
+                  <text v-if="isExcludedOrExempt(r, 'math')" style="color: #34C759;">✅ 已免除</text>
                   <text v-else>—</text>
                 </text>
               </view>
 
               <view class="record-row">
                 <text class="record-tag">💻 网课</text>
-                <text v-if="r.class_title" class="record-val">{{ r.class_title }}（{{ r.class_type }}）</text>
+                <text v-if="hasActualRecord(r, 'class')" class="record-val">{{ r.class_title }}（{{ r.class_type }}）</text>
                 <text v-else class="record-val empty-val">
-                  <text v-if="isExcluded(r.date, 'class')" style="color: #34C759;">✅ 已免除</text>
+                  <text v-if="isExcludedOrExempt(r, 'class')" style="color: #34C759;">✅ 已免除</text>
                   <text v-else>—</text>
                 </text>
               </view>
@@ -151,7 +158,6 @@
       </view>
     </transition>
 
-    <!-- 密码验证弹窗 -->
     <transition name="modal-anim">
       <view v-if="showPwdDialog" class="overlay" style="align-items: center; justify-content: center; z-index: 1000;" @click="closePwdDialog">
         <view class="pwd-box" @click.stop>
@@ -165,11 +171,55 @@
       </view>
     </transition>
 
+    <transition name="modal-anim">
+      <view v-if="showRewardDialog" class="overlay" style="align-items: center; justify-content: center; z-index: 1000;" @click="closeRewardDialog">
+        <view class="reward-box" @click.stop>
+          <view class="pwd-title">添加金额信息</view>
+
+          <view class="reward-field">
+            <text class="reward-label">金额</text>
+            <input
+              class="reward-input"
+              type="digit"
+              placeholder="请输入金额"
+              v-model="rewardAmountInput"
+            />
+          </view>
+
+          <view class="reward-field">
+            <text class="reward-label">状态</text>
+            <view class="reward-status-group">
+              <view
+                class="reward-status-option"
+                :class="{ 'reward-status-option-active': rewardStatusInput === 'pending' }"
+                @click="rewardStatusInput = 'pending'"
+              >
+                待领取
+              </view>
+              <view
+                class="reward-status-option"
+                :class="{ 'reward-status-option-active': rewardStatusInput === 'received' }"
+                @click="rewardStatusInput = 'received'"
+              >
+                已领取
+              </view>
+            </view>
+          </view>
+
+          <view class="btn-row" style="margin-top: 40rpx;">
+            <view class="btn-cancel" @click="closeRewardDialog">取消</view>
+            <view class="btn-delete" @click="deleteRewardMeta">删除</view>
+            <view class="btn-save" @click="confirmRewardSave">确定</view>
+          </view>
+        </view>
+      </view>
+    </transition>
+
   </view>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import Global from "@/utils/Global.js";
 
 const isWide = ref(false);
@@ -191,6 +241,8 @@ const endDate = ref("");
 const records = ref([]);
 const savedStart = ref("");
 const savedEnd = ref("");
+const savedAmount = ref("");
+const savedStatus = ref("");
 const totalDone = ref(0);
 const totalMissed = ref(0);
 const totalExcluded = ref(0);
@@ -201,7 +253,30 @@ const exclusionsList = ref([]);
 // === 密码验证逻辑 ===
 const showPwdDialog = ref(false);
 const pwdInput = ref("");
+const showRewardDialog = ref(false);
+const rewardAmountInput = ref("");
+const rewardStatusInput = ref("pending");
+const touchStartX = ref(0);
+const touchStartY = ref(0);
+const suppressSavedRowClick = ref(false);
 let pwdSuccessCallback = null;
+
+const savedAmountDisplay = computed(() => {
+  if (savedAmount.value === "" || savedAmount.value === null || savedAmount.value === undefined) return "";
+  return `${savedAmount.value}`;
+});
+
+const savedStatusLabel = computed(() => {
+  if (savedStatus.value === "pending") return "待领取";
+  if (savedStatus.value === "received") return "已领取";
+  return "";
+});
+
+const savedStatusClass = computed(() => {
+  if (savedStatus.value === "received") return "saved-status-received";
+  if (savedStatus.value === "pending") return "saved-status-pending";
+  return "";
+});
 
 const requirePassword = (callback) => {
   pwdInput.value = ""; 
@@ -212,6 +287,10 @@ const requirePassword = (callback) => {
 const closePwdDialog = () => {
   showPwdDialog.value = false;
   pwdSuccessCallback = null;
+};
+
+const closeRewardDialog = () => {
+  showRewardDialog.value = false;
 };
 
 const verifyPwd = () => {
@@ -244,6 +323,27 @@ const loadExclusions = (callback) => {
 
 const isExcluded = (date, section) => exclusionsList.value.includes(`${date}:${section}`);
 
+const isCouponExempt = (record, section) => {
+  if (!record) return false;
+  if (section === "reading") return String(record.reading_start) === "-1" && String(record.reading_end) === "-1";
+  if (section === "math") return record.math_title === "媛媛免除";
+  if (section === "class") return record.class_title === "媛媛免除";
+  return false;
+};
+
+const isExcludedOrExempt = (record, section) => {
+  if (!record) return false;
+  return isExcluded(record.date, section) || isCouponExempt(record, section);
+};
+
+const hasActualRecord = (record, section) => {
+  if (!record || isCouponExempt(record, section)) return false;
+  if (section === "reading") return !!(record.reading_start || record.reading_start === 0) && !!(record.reading_end || record.reading_end === 0);
+  if (section === "math") return !!record.math_title;
+  if (section === "class") return !!record.class_title;
+  return false;
+};
+
 const toggleExclude = (date, section) => {
   const key = `${date}:${section}`;
   if (exclusionsList.value.includes(key)) {
@@ -257,19 +357,20 @@ const calcStats = () => {
   let doneCount = 0;
   let missedCount = 0;
   let excludedCount = 0;
+  const todayStr = new Date().toISOString().split("T")[0];
   
   records.value.forEach((r) => {
-    if (r.reading_start) doneCount++;
-    else if (isExcluded(r.date, 'reading')) excludedCount++;
-    else missedCount++;
+    if (hasActualRecord(r, 'reading')) doneCount++;
+    else if (isExcludedOrExempt(r, 'reading')) excludedCount++;
+    else if (r.date <= todayStr) missedCount++;
     
-    if (r.math_title) doneCount++;
-    else if (isExcluded(r.date, 'math')) excludedCount++;
-    else missedCount++;
+    if (hasActualRecord(r, 'math')) doneCount++;
+    else if (isExcludedOrExempt(r, 'math')) excludedCount++;
+    else if (r.date <= todayStr) missedCount++;
     
-    if (r.class_title) doneCount++;
-    else if (isExcluded(r.date, 'class')) excludedCount++;
-    else missedCount++;
+    if (hasActualRecord(r, 'class')) doneCount++;
+    else if (isExcludedOrExempt(r, 'class')) excludedCount++;
+    else if (r.date <= todayStr) missedCount++;
   });
   
   totalDone.value = doneCount;
@@ -287,6 +388,8 @@ const loadSavedDateRange = () => {
       if (res.data?.code === 0) {
         savedStart.value = res.data.startDate || "";
         savedEnd.value = res.data.endDate || "";
+        savedAmount.value = res.data.amount ?? "";
+        savedStatus.value = res.data.status || "";
       }
     },
   });
@@ -373,6 +476,107 @@ const useSavedAndFetch = () => {
   });
 };
 
+const onSavedRowClick = () => {
+  if (suppressSavedRowClick.value) {
+    suppressSavedRowClick.value = false;
+    return;
+  }
+  useSavedAndFetch();
+};
+
+const onSavedRowTouchStart = (event) => {
+  const touch = event.changedTouches?.[0];
+  if (!touch) return;
+  touchStartX.value = touch.clientX;
+  touchStartY.value = touch.clientY;
+};
+
+const onSavedRowTouchEnd = (event) => {
+  const touch = event.changedTouches?.[0];
+  if (!touch) return;
+
+  const deltaX = touch.clientX - touchStartX.value;
+  const deltaY = Math.abs(touch.clientY - touchStartY.value);
+
+  if (deltaX > 70 && deltaY < 35) {
+    suppressSavedRowClick.value = true;
+    requirePassword(() => {
+      rewardAmountInput.value = savedAmount.value === "" ? "" : String(savedAmount.value);
+      rewardStatusInput.value = savedStatus.value || "pending";
+      showRewardDialog.value = true;
+    });
+  }
+};
+
+const confirmRewardSave = () => {
+  if (!savedStart.value || !savedEnd.value) {
+    uni.showToast({ title: "请先保存常用日期", icon: "none" });
+    return;
+  }
+
+  if (rewardAmountInput.value === "" || Number.isNaN(Number(rewardAmountInput.value))) {
+    uni.showToast({ title: "请输入有效金额", icon: "none" });
+    return;
+  }
+
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "saveSavedDateRangeMeta",
+      startDate: savedStart.value,
+      endDate: savedEnd.value,
+      amount: rewardAmountInput.value,
+      status: rewardStatusInput.value,
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        savedAmount.value = rewardAmountInput.value;
+        savedStatus.value = rewardStatusInput.value;
+        showRewardDialog.value = false;
+        uni.showToast({ title: "保存成功", icon: "success" });
+      } else {
+        uni.showToast({ title: res.data?.msg || "保存失败", icon: "none" });
+      }
+    },
+    fail: () => {
+      uni.showToast({ title: "网络请求异常", icon: "none" });
+    },
+  });
+};
+
+const deleteRewardMeta = () => {
+  if (!savedStart.value || !savedEnd.value) {
+    uni.showToast({ title: "请先保存常用日期", icon: "none" });
+    return;
+  }
+
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "deleteSavedDateRangeMeta",
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        savedAmount.value = "";
+        savedStatus.value = "";
+        rewardAmountInput.value = "";
+        rewardStatusInput.value = "pending";
+        showRewardDialog.value = false;
+        uni.showToast({ title: "已删除", icon: "success" });
+      } else {
+        uni.showToast({ title: res.data?.msg || "删除失败", icon: "none" });
+      }
+    },
+    fail: () => {
+      uni.showToast({ title: "网络请求异常", icon: "none" });
+    },
+  });
+};
+
 const fetchRecords = () => {
   uni.request({
     url: `${Global.BASE_URL}/`,
@@ -421,17 +625,18 @@ onUnmounted(() => {
   window.removeEventListener("resize", checkWidth);
   // #endif
 });
+
+// 【核心修复】必须写在 script 的最下面！
+defineExpose({
+  openPicker
+});
 </script>
 
 <style lang="scss" scoped>
-/* ====================================================
-   【原版基础样式】
-   ==================================================== */
-.viewer-btn { background: #fff; border-radius: 20rpx; padding: 28rpx 30rpx; margin-bottom: 20rpx; display: flex; align-items: center; justify-content: center; box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03); }
-.viewer-btn-text { font-size: 30rpx; color: #ff2d55; font-weight: bold; }
 .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 999; display: flex; align-items: flex-end; }
 .popup-box { width: 100%; background: #fff; border-radius: 32rpx 32rpx 0 0; padding: 40rpx 30rpx 60rpx; box-sizing: border-box; }
 .result-box { display: flex; flex-direction: column; }
+.result-box .popup-title { margin-top: 16rpx; }
 .record-card { background: #fff; border-radius: 16rpx; padding: 28rpx; margin-bottom: 16rpx; box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04); }
 .empty-card { background: #fafafa; border: 1rpx dashed #e0e0e0; box-shadow: none; }
 .record-date { font-size: 28rpx; font-weight: bold; color: #333; margin-bottom: 20rpx; display: flex; align-items: center; gap: 12rpx; }
@@ -441,17 +646,26 @@ onUnmounted(() => {
 .record-val { font-size: 26rpx; color: #333; flex: 1; }
 .empty-val { color: #ccc; }
 .popup-title { font-size: 32rpx; font-weight: bold; color: #333; margin-bottom: 40rpx; display: flex; justify-content: space-between; align-items: center; }
+.result-title-range { min-width: 0; flex: 1; white-space: nowrap; }
+.range-picker-box .popup-title { margin-top: 16rpx; }
 .result-count { font-size: 24rpx; color: #999; font-weight: normal; }
 .date-row { display: flex; justify-content: space-between; align-items: center; padding: 28rpx 0; border-bottom: 1rpx solid #f0f0f0; }
 .date-label { font-size: 30rpx; color: #333; }
 .date-value { font-size: 30rpx; color: #ff2d55; }
 .saved-row { display: flex; justify-content: space-between; align-items: center; margin-top: 30rpx; padding: 24rpx 28rpx; background: #fff8f0; border-radius: 16rpx; border: 1rpx solid #ffe0b2; }
-.saved-info { display: flex; align-items: center; gap: 10rpx; flex: 1; }
+.saved-info { display: flex; flex-direction: column; gap: 12rpx; flex: 1; }
+.saved-main { display: flex; align-items: center; gap: 10rpx; }
 .saved-label { font-size: 26rpx; color: #ff9500; white-space: nowrap; }
 .saved-dates { font-size: 24rpx; color: #666; }
+.saved-meta { display: flex; align-items: center; gap: 12rpx; flex-wrap: wrap; }
+.saved-meta-text { font-size: 22rpx; color: #8a5a00; }
+.saved-status { font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 20rpx; }
+.saved-status-pending { color: #b26a00; background: #ffecbf; }
+.saved-status-received { color: #1f7a45; background: #dff5e7; }
 .saved-btn-quick { font-size: 26rpx; color: #fff; background: #ff9500; padding: 12rpx 24rpx; border-radius: 30rpx; white-space: nowrap; }
 .btn-row { display: flex; gap: 20rpx; margin-top: 40rpx; }
 .btn-cancel { flex: 1; height: 88rpx; border-radius: 50rpx; border: 1rpx solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #666; }
+.btn-delete { flex: 1; height: 88rpx; border-radius: 50rpx; border: 1rpx solid #ffd0d8; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #ff5c7a; background: #fff5f7; }
 .btn-save { flex: 1; height: 88rpx; border-radius: 50rpx; background: #ff2d55; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #fff; }
 
 .stat-row { display: flex; align-items: center; background: #f9f9f9; border-radius: 16rpx; padding: 24rpx 0; margin-bottom: 30rpx; }
@@ -469,14 +683,40 @@ onUnmounted(() => {
 .ex-tag { padding: 10rpx 24rpx; border-radius: 40rpx; font-size: 24rpx; color: #666; background: #f5f5f5; border: 1rpx solid #e0e0e0; transition: all 0.2s; }
 .ex-tag-active { color: #fff; background: #34C759; border-color: #34C759; }
 
-/* ====================================================
-   【自适应宽高与安全区适配】
-   ==================================================== */
 .dynamic-scroll { height: 55vh; }
 .wide-overlay { align-items: stretch; justify-content: flex-start; }
 .drawer-left { width: 420px; max-width: 85vw; height: 100vh; border-radius: 0; display: flex; flex-direction: column; overflow: hidden; }
+.drawer-left.range-picker-box { width: 560px; max-width: 92vw; padding: 40px 36px 44px; }
+.drawer-left.range-picker-box .popup-title { font-size: 29px; margin-top: 8px; margin-bottom: 30px; }
+.drawer-left.range-picker-box .date-row { padding: 22px 0; }
+.drawer-left.range-picker-box .date-label,
+.drawer-left.range-picker-box .date-value { font-size: 22px; }
+.drawer-left.range-picker-box .saved-row { margin-top: 24px; padding: 20px 22px; border-radius: 14px; }
+.drawer-left.range-picker-box .saved-label { font-size: 18px; }
+.drawer-left.range-picker-box .saved-dates { font-size: 17px; }
+.drawer-left.range-picker-box .saved-meta-text,
+.drawer-left.range-picker-box .saved-status { font-size: 15px; }
+.drawer-left.range-picker-box .saved-btn-quick { font-size: 17px; padding: 10px 18px; }
+.drawer-left.range-picker-box .btn-cancel,
+.drawer-left.range-picker-box .btn-delete,
+.drawer-left.range-picker-box .btn-save { height: 56px; font-size: 18px; }
 .drawer-left .dynamic-scroll { flex: 1; height: 0; margin-bottom: 20rpx; }
 .drawer-left .btn-row { margin-top: auto; padding-bottom: 20rpx; }
+.result-drawer-left { width: 520px; max-width: 92vw; }
+.result-drawer-left .popup-title { margin-top: 8px; margin-bottom: 28px; font-size: 26px; gap: 12px; }
+.result-drawer-left .result-title-range { font-size: 24px; }
+.result-drawer-left .result-count { flex-shrink: 0; white-space: nowrap; font-size: 16px; }
+.result-drawer-left .stat-row { margin-bottom: 24px; padding: 22px 0; }
+.result-drawer-left .stat-num { font-size: 42px; }
+.result-drawer-left .stat-label { font-size: 16px; }
+.result-drawer-left .record-card { padding: 24px; margin-bottom: 14px; border-radius: 14px; }
+.result-drawer-left .record-date { font-size: 22px; margin-bottom: 16px; gap: 10px; }
+.result-drawer-left .no-record-badge { font-size: 15px; padding: 4px 12px; }
+.result-drawer-left .record-row { margin-bottom: 12px; gap: 12px; }
+.result-drawer-left .record-tag { font-size: 18px; min-width: 76px; }
+.result-drawer-left .record-val { font-size: 18px; }
+.result-drawer-left .btn-cancel,
+.result-drawer-left .btn-save { height: 56px; font-size: 18px; }
 
 .popup-bottom {
   padding-bottom: calc(60rpx + constant(safe-area-inset-bottom));
@@ -490,38 +730,33 @@ onUnmounted(() => {
 /* #endif */
 
 .pwd-box { background: #fff; width: 80%; max-width: 600rpx; border-radius: 24rpx; padding: 50rpx 40rpx; box-sizing: border-box; box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.1); }
+.reward-box { background: #fff; width: 84%; max-width: 680rpx; border-radius: 24rpx; padding: 50rpx 40rpx; box-sizing: border-box; box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.1); }
 .pwd-title { font-size: 34rpx; font-weight: bold; text-align: center; margin-bottom: 40rpx; color: #333; }
 .pwd-input { background: #f5f5f5; height: 88rpx; border-radius: 16rpx; padding: 0 24rpx; font-size: 30rpx; text-align: center; width: 100%; box-sizing: border-box; }
+.reward-field { display: flex; flex-direction: column; gap: 18rpx; margin-bottom: 28rpx; }
+.reward-label { font-size: 28rpx; color: #444; font-weight: 600; }
+.reward-input { background: #f5f5f5; height: 88rpx; border-radius: 16rpx; padding: 0 24rpx; font-size: 30rpx; width: 100%; box-sizing: border-box; }
+.reward-status-group { display: flex; gap: 18rpx; }
+.reward-status-option { flex: 1; height: 84rpx; border-radius: 16rpx; border: 1rpx solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 28rpx; color: #666; background: #fff; }
+.reward-status-option-active { color: #fff; border-color: #ff9500; background: #ff9500; }
 
-
-/* ====================================================
-   【核心修复】跨端完美动画（H5/小程序通用 Keyframes）
-   ==================================================== */
-/* 1. 遮罩层共用淡入淡出 */
 .modal-anim-enter-active { animation: fadeIn 0.3s ease forwards; }
 .modal-anim-leave-active { animation: fadeOut 0.3s ease forwards; }
-
-/* 2. 手机端底部弹窗 */
 .modal-anim-enter-active .popup-bottom { animation: slideUpIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
 .modal-anim-leave-active .popup-bottom { animation: slideUpOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
-
-/* 3. 大屏左侧抽屉 */
 .modal-anim-enter-active .drawer-left { animation: slideLeftIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
 .modal-anim-leave-active .drawer-left { animation: slideLeftOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
-
-/* 4. 密码框居中缩放 */
 .modal-anim-enter-active .pwd-box { animation: popIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
 .modal-anim-leave-active .pwd-box { animation: popOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
+.modal-anim-enter-active .reward-box { animation: popIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
+.modal-anim-leave-active .reward-box { animation: popOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
 
 @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes fadeOut { 0% { opacity: 1; } 100% { opacity: 0; } }
-
 @keyframes slideUpIn { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
 @keyframes slideUpOut { 0% { transform: translateY(0); } 100% { transform: translateY(100%); } }
-
 @keyframes slideLeftIn { 0% { transform: translateX(-100%); } 100% { transform: translateX(0); } }
 @keyframes slideLeftOut { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
-
 @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes popOut { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0; } }
 </style>

@@ -1,11 +1,9 @@
 <template>
   <view class="page-layout" :class="{ 'wide-layout': isWide }">
-    <!-- H5 大屏布局：顶部工具栏 + 日历主区 + 录入辅助区 -->
     <view v-if="isWide" class="desktop-layout">
       <view class="desktop-nav">
         <text class="desktop-title">学习日历</text>
-        <RecordViewer class="record-viewer wide nav-viewer" />
-      </view>
+        </view>
 
       <view class="desktop-content">
         <view class="calendar-section">
@@ -15,23 +13,23 @@
             :partial-dates="partialDateSet"
             :wide="isWide"
             @month-change="onMonthChange"
+            @open-range-viewer="handleOpenViewer"
           />
         </view>
 
         <view class="entry-section">
-          <scroll-view scroll-y class="entry-scroll">
+          <view class="entry-scroll">
             <InputEntry
               :selected-date="selectedDate"
               :day-record="currentDayRecord"
               @saved="onDataChanged"
               @deleted="onDataChanged"
             />
-          </scroll-view>
+          </view>
         </view>
       </view>
     </view>
 
-    <!-- 窄屏（手机）保持原有纵向布局和悬浮按钮 -->
     <view v-if="!isWide" class="mobile-layout">
       <scroll-view scroll-y class="wrapper">
         <CalendarPicker
@@ -39,6 +37,7 @@
           :record-dates="recordDateSet"
           :partial-dates="partialDateSet"
           @month-change="onMonthChange"
+          @open-range-viewer="handleOpenViewer" 
         />
         <InputEntry
           :selected-date="selectedDate"
@@ -47,8 +46,10 @@
           @deleted="onDataChanged"
         />
       </scroll-view>
-      <RecordViewer class="float-viewer" />
     </view>
+
+    <RecordViewer ref="recordViewerRef" />
+    
   </view>
 </template>
 
@@ -65,6 +66,18 @@ const currentDayRecord = ref(null);
 const recordDateSet   = ref(new Set());
 const partialDateSet  = ref(new Set());
 const isWide          = ref(false);
+const recordViewerRef = ref(null);
+
+// 触发弹窗
+const handleOpenViewer = () => {
+  if (recordViewerRef.value) {
+    // 调用 RecordViewer.vue 里面的 openPicker 方法
+    recordViewerRef.value.openPicker();
+  }
+};
+
+// === 新增：存储免除名单 ===
+const exclusionsList = ref([]);
 
 const formatDate = (date) => {
   const y = date.getFullYear();
@@ -73,29 +86,68 @@ const formatDate = (date) => {
   return `${y}-${m}-${d}`;
 };
 
-const isFullRecord = (record) => {
-  if (!record) return false;
-  const hasReading = !!(record.reading_start && record.reading_end);
-  const hasMath = !!(
-    record.math_title &&
-    (record.math_min || record.math_min === 0) &&
-    (record.math_sec || record.math_sec === 0)
-  );
-  const hasClass = !!(record.class_title && record.class_type);
-  return hasReading && hasMath && hasClass;
+// === 新增：加载后端的免除名单 ===
+const loadExclusions = () => {
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: { method: "getExclusions" },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        exclusionsList.value = res.data.exclusions || [];
+        syncDerivedState(); // 名单拉取后，重新计算圆点
+      }
+    },
+  });
 };
 
-const syncDerivedState = () => {
-  const keys = Object.keys(monthRecords.value);
-  recordDateSet.value = new Set(keys);
+// 辅助函数：判断某天某项是否被免除
+const isExcluded = (dateStr, section) => {
+  return exclusionsList.value.includes(`${dateStr}:${section}`);
+};
 
+// === 核心逻辑升级：合并计算录入记录与免除名单 ===
+const syncDerivedState = () => {
+  const fullSet = new Set();
   const partialSet = new Set();
-  keys.forEach((key) => {
-    const rec = monthRecords.value[key];
-    if (rec && !isFullRecord(rec)) {
-      partialSet.add(key);
+
+  // 把“有记录的日期”和“有免除项的日期”全部收集起来遍历
+  const datesToCheck = new Set(Object.keys(monthRecords.value));
+  exclusionsList.value.forEach(ex => {
+    const dateStr = ex.split(':')[0];
+    datesToCheck.add(dateStr);
+  });
+
+  datesToCheck.forEach((dateStr) => {
+    const record = monthRecords.value[dateStr] || null;
+    let doneCount = 0;
+
+    // 1. 阅读（真完成 or 被免除）
+    const hasReading = record && !!(record.reading_start && record.reading_end);
+    if (hasReading || isExcluded(dateStr, 'reading')) doneCount++;
+
+    // 2. 数学（真完成 or 被免除）
+    const hasMath = record && !!(
+      record.math_title &&
+      (record.math_min || record.math_min === 0) &&
+      (record.math_sec || record.math_sec === 0)
+    );
+    if (hasMath || isExcluded(dateStr, 'math')) doneCount++;
+
+    // 3. 网课（真完成 or 被免除）
+    const hasClass = record && !!(record.class_title && record.class_type);
+    if (hasClass || isExcluded(dateStr, 'class')) doneCount++;
+
+    // 评判颜色标志
+    if (doneCount === 3) {
+      fullSet.add(dateStr);    // 三项全部搞定 -> 红点
+    } else if (doneCount > 0) {
+      partialSet.add(dateStr); // 搞定 1~2 项 -> 蓝点
     }
   });
+
+  recordDateSet.value = fullSet;
   partialDateSet.value = partialSet;
 
   const key = formatDate(selectedDate.value);
@@ -128,22 +180,25 @@ const fetchMonthRecords = ({ year, month }) => {
   });
 };
 
-const onMonthChange = ({ year, month }) => fetchMonthRecords({ year, month });
+const onMonthChange = ({ year, month }) => {
+  fetchMonthRecords({ year, month });
+  loadExclusions(); // 换月时顺便拉取免除名单
+};
+
 const onDataChanged = (dateStr) => {
   const d = new Date(dateStr);
   fetchMonthRecords({ year: d.getFullYear(), month: d.getMonth() + 1 });
+  loadExclusions(); // 数据变动时刷新免除名单
 };
 
 // 响应式宽度判断
 const checkWidth = () => {
   // #ifdef H5
-  const width =
-    window.innerWidth || document.documentElement?.clientWidth || 0;
+  const width = window.innerWidth || document.documentElement?.clientWidth || 0;
   isWide.value = width >= 1024;
   return;
   // #endif
 
-  // 小程序和其他小屏端保持纵向布局，避免 H5 专用大屏样式误入。
   isWide.value = false;
 };
 
@@ -153,13 +208,24 @@ onMounted(() => {
   window.addEventListener("resize", checkWidth);
   // #endif
 
+  // === 监听弹窗组件操作完成后的刷新信号 ===
+  uni.$on('refreshCalendar', () => {
+    const now = selectedDate.value;
+    fetchMonthRecords({ year: now.getFullYear(), month: now.getMonth() + 1 });
+    loadExclusions();
+  });
+
   const now = new Date();
   fetchMonthRecords({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  loadExclusions();
 });
 
-// #ifdef H5
-onUnmounted(() => window.removeEventListener("resize", checkWidth));
-// #endif
+onUnmounted(() => {
+  // #ifdef H5
+  window.removeEventListener("resize", checkWidth);
+  // #endif
+  uni.$off('refreshCalendar');
+});
 </script>
 
 <style lang="scss" scoped>
@@ -216,6 +282,7 @@ onUnmounted(() => window.removeEventListener("resize", checkWidth));
 .calendar-section {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
 }
 
@@ -233,13 +300,23 @@ onUnmounted(() => window.removeEventListener("resize", checkWidth));
   overflow-y: auto;
 }
 
-.record-viewer.wide {
-  position: static;
+/* 窄屏（手机）样式完全保留 */
+.mobile-layout {
+  height: 100vh;
+}
+.wrapper {
+  height: 100vh;
+  background: #f7f7f7;
+  padding: 20rpx;
+  box-sizing: border-box;
 }
 
-.nav-viewer {
-  flex-shrink: 0;
+/* #ifdef MP-WEIXIN */
+.wrapper {
+  padding-bottom: calc(10rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(10rpx + env(safe-area-inset-bottom));
 }
+/* #endif */
 
 :deep(.entry-container) {
   padding: 0;
@@ -252,51 +329,5 @@ onUnmounted(() => window.removeEventListener("resize", checkWidth));
 :deep(.entry-container .card) {
   margin-bottom: 16px;
   padding: 22px;
-}
-
-:deep(.nav-viewer .viewer-btn) {
-  margin-bottom: 0;
-  padding: 9px 18px;
-  border: 1px solid #ffe0e7;
-  box-shadow: none;
-}
-
-:deep(.nav-viewer .viewer-btn-text) {
-  font-size: 15px;
-}
-
-/* 窄屏（手机）样式完全保留 */
-.mobile-layout {
-  height: 100vh;
-}
-.wrapper {
-  height: 100vh;
-  background: #f7f7f7;
-  padding: 20rpx;
-  box-sizing: border-box;
-}
-.float-viewer {
-  position: fixed;
-  right: 30rpx;
-  bottom: 60rpx;
-  z-index: 100;
-}
-
-/* #ifdef MP-WEIXIN */
-.wrapper {
-  padding-bottom: calc(180rpx + constant(safe-area-inset-bottom));
-  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
-}
-
-.float-viewer {
-  bottom: calc(120rpx + constant(safe-area-inset-bottom));
-  bottom: calc(120rpx + env(safe-area-inset-bottom));
-}
-/* #endif */
-
-/* 宽屏下查看按钮回归正常流 */
-.record-viewer.wide {
-  position: static;
-  margin-top: 0;
 }
 </style>
