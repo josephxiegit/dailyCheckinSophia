@@ -234,6 +234,12 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100vh;
   background: #f7f7f7;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 
   /* 宽屏左右布局 */
   &.wide-layout {
@@ -261,6 +267,7 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   box-sizing: border-box;
   flex-shrink: 0;
+  z-index: 10;
 }
 
 .desktop-title {
@@ -270,20 +277,23 @@ onUnmounted(() => {
 }
 
 .desktop-content {
-  min-height: 0;
   flex: 1;
   display: flex;
   gap: 20px;
-  padding: 20px 24px 24px;
+  padding: 20px 24px;
   box-sizing: border-box;
   overflow: hidden;
+  min-height: 0;
 }
 
 .calendar-section {
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
-  min-height: 0;
   display: flex;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .entry-section {
@@ -292,17 +302,22 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .entry-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 窄屏（手机）样式完全保留 */
 .mobile-layout {
   height: 100vh;
+  overflow: hidden;
 }
 .wrapper {
   height: 100vh;

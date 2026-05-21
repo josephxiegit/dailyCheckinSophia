@@ -38,7 +38,7 @@
         <view v-if="isEditable" class="card-action-wrap">
           <view class="card-action-row">
           <view v-if="isLockedReading" class="locked-action-block">
-            <u-button text="编辑阅读" color="#bbbbbb" size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="editingReading = true"></u-button>
+            <u-button text="编辑阅读" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingReading = true"></u-button>
             <text v-if="readingActionTime" class="status-time">保存于 {{ readingActionTime }}</text>
           </view>
           <block v-else>
@@ -83,7 +83,7 @@
         <view v-if="isEditable" class="card-action-wrap">
           <view class="card-action-row">
           <view v-if="isLockedMath" class="locked-action-block">
-            <u-button text="编辑数学" color="#bbbbbb" size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="editingMath = true"></u-button>
+            <u-button text="编辑数学" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingMath = true"></u-button>
             <text v-if="mathActionTime" class="status-time">保存于 {{ mathActionTime }}</text>
           </view>
           <block v-else>
@@ -114,17 +114,17 @@
 
       <block v-else>
         <u-input v-model="form.classTitle" placeholder="课程标题" :disabled="!isEditable || isLockedClass" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
-        <view class="radio-row">
+        <view class="radio-row" :class="{ 'radio-row--locked': isLockedClass, 'radio-row--readonly': !isEditable }">
           <u-radio-group v-model="form.classType" placement="row">
-            <u-radio label="上" name="上" activeColor="#34C759" :disabled="!isEditable || isLockedClass" customStyle="margin-right: 40rpx;"></u-radio>
-            <u-radio label="下" name="下" activeColor="#34C759" :disabled="!isEditable || isLockedClass" customStyle="margin-right: 40rpx;"></u-radio>
-            <u-radio label="全部" name="全部" activeColor="#34C759" :disabled="!isEditable || isLockedClass"></u-radio>
+            <u-radio label="上" name="上" :activeColor="isLockedClass || !isEditable ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
+            <u-radio label="下" name="下" :activeColor="isLockedClass || !isEditable ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
+            <u-radio label="全部" name="全部" :activeColor="isLockedClass || !isEditable ? '#bbbbbb' : '#34C759'"></u-radio>
           </u-radio-group>
         </view>
         <view v-if="isEditable" class="card-action-wrap">
           <view class="card-action-row">
           <view v-if="isLockedClass" class="locked-action-block">
-            <u-button text="编辑网课" color="#bbbbbb" size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="editingClass = true"></u-button>
+            <u-button text="编辑网课" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingClass = true"></u-button>
             <text v-if="classActionTime" class="status-time">保存于 {{ classActionTime }}</text>
           </view>
           <block v-else>
@@ -438,12 +438,12 @@ const populate = (record) => {
   form.mathSec = formatTimeValue(record?.math_sec);
   form.classTitle   = record?.class_title ?? '';
   form.classType    = record?.class_type  ?? '';
-  readingActionTime.value = formatActionTime(record?.reading_saved_at);
-  mathActionTime.value = formatActionTime(record?.math_saved_at);
-  classActionTime.value = formatActionTime(record?.class_saved_at);
-  readingCouponActionTime.value = formatActionTime(record?.reading_coupon_used_at);
-  mathCouponActionTime.value = formatActionTime(record?.math_coupon_used_at);
-  classCouponActionTime.value = formatActionTime(record?.class_coupon_used_at);
+  if (record?.reading_saved_at !== undefined) readingActionTime.value = formatActionTime(record.reading_saved_at);
+  if (record?.math_saved_at !== undefined) mathActionTime.value = formatActionTime(record.math_saved_at);
+  if (record?.class_saved_at !== undefined) classActionTime.value = formatActionTime(record.class_saved_at);
+  if (record?.reading_coupon_used_at !== undefined) readingCouponActionTime.value = formatActionTime(record.reading_coupon_used_at);
+  if (record?.math_coupon_used_at !== undefined) mathCouponActionTime.value = formatActionTime(record.math_coupon_used_at);
+  if (record?.class_coupon_used_at !== undefined) classCouponActionTime.value = formatActionTime(record.class_coupon_used_at);
   
   editingReading.value = false;
   editingMath.value    = false;
@@ -707,13 +707,23 @@ onUnmounted(() => {
 .card-action-wrap { display: flex; flex-direction: column; gap: 12rpx; margin-top: 30rpx; }
 .action-btn-block { display: flex; flex-direction: column; gap: 8rpx; flex: 1; }
 .action-btn-block--split { margin-left: 20rpx; }
-.locked-action-block { display: flex; flex-direction: column; gap: 8rpx; flex: 1; }
-.locked-action-block :deep(.u-button) { min-height: 104rpx !important; }
-.locked-action-block :deep(.u-button__text) { font-size: 30rpx !important; }
+.locked-action-block { display: flex; flex-direction: column; gap: 8rpx; width: 100%; }
+.locked-action-block :deep(.u-button) { 
+  min-height: 120rpx !important; 
+  width: 100% !important; 
+  flex: unset !important;
+  border-radius: 16rpx !important; 
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+.locked-action-block :deep(.u-button__text) { font-size: 36rpx !important; font-weight: 600 !important; letter-spacing: 2rpx; }
 .status-time { font-size: 20rpx; color: #999; line-height: 1.2; padding-left: 10rpx; }
 .input-row { display: flex; align-items: center; gap: 20rpx; .split { color: #999; } }
 .time-row { display: flex; align-items: center; gap: 10rpx; font-size: 28rpx; color: #333; .time-input { display: flex; align-items: center; width: 140rpx; gap: 10rpx; } }
 .radio-row { padding-top: 10rpx; }
+.radio-row--locked { pointer-events: none; }
+.radio-row--readonly { pointer-events: none; }
+.radio-row--readonly :deep(.u-radio__label) { color: #bbb !important; }
 .delete-row { margin-top: 10rpx; margin-bottom: 40rpx; }
 .block-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; background: transparent; }
 
@@ -757,7 +767,8 @@ onUnmounted(() => {
 @keyframes popOut { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0; } }
 
 @media (min-width: 1024px) {
-  .entry-container { padding: 24px 10px; :deep(input), :deep(.u-input__content__field-wrapper__field), :deep(.u-radio__text), .label, .time-input text, .split { font-size: 18px !important; } .date-banner { padding: 20px 24px; .date-label { font-size: 22px; } .edit-hint { font-size: 15px; } } .card { padding: 30px; margin-bottom: 24px; .card-title { font-size: 20px; margin-bottom: 24px; .card-icon { font-size: 24px; } } } :deep(.u-button__text) { font-size: 16px !important; } .locked-action-block :deep(.u-button) { min-height: 54px !important; } .locked-action-block :deep(.u-button__text) { font-size: 18px !important; } .status-time { font-size: 14px; } }
+  .entry-container { padding: 24px 10px; :deep(input), :deep(.u-input__content__field-wrapper__field), :deep(.u-radio__text), .label, .time-input text, .split { font-size: 18px !important; } .date-banner { padding: 20px 24px; .date-label { font-size: 22px; } .edit-hint { font-size: 15px; } } .card { padding: 30px; margin-bottom: 24px; .card-title { font-size: 20px; margin-bottom: 24px; .card-icon { font-size: 24px; } } } :deep(.u-button__text) { font-size: 16px !important; } .locked-action-block :deep(.u-button) { min-height: 54px !important; width: 100% !important; flex: unset !important; padding-left: 0 !important; padding-right: 0 !important; }
+  .locked-action-block :deep(.u-button__text) { font-size: 20px !important; } .status-time { font-size: 14px; } }
   .complete-image { width: min(32vw, 520px); max-width: 520px; }
 }
 </style>

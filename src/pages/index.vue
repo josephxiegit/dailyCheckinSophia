@@ -9,9 +9,19 @@ import MyCalendar from '@/components/MyCalendar/MyCalendar.vue';
 </script>
 
 <style lang="scss">
+page {
+  height: 100%;
+  overflow: hidden;
+}
+
 .app-container {
   background-color: #f7f8fa;
-  min-height: 100vh;
-  padding-bottom: 50rpx;
+  height: 100vh;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 </style>

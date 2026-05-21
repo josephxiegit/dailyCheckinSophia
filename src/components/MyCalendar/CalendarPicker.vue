@@ -246,7 +246,6 @@ onMounted(() => {
 .wide-calendar {
   width: 100%;
   height: 100%;
-  min-height: 0;
   padding: 28px 30px;
   box-sizing: border-box;
   display: flex;
@@ -268,11 +267,17 @@ onMounted(() => {
     padding: 8px 18px;
   }
 
+  .weekdays {
+    font-size: 15px;
+    padding: 0 0 14px;
+    flex-shrink: 0;
+  }
+
   .days-grid {
     flex: 1;
     min-height: 0;
     gap: 10px;
-    grid-template-rows: repeat(6, minmax(0, 1fr));
+    grid-template-rows: repeat(6, 1fr);
   }
 
   .day-cell {
@@ -280,12 +285,6 @@ onMounted(() => {
     min-height: 0;
     border-radius: 12px;
     font-size: clamp(20px, 1.7vw, 30px);
-  }
-
-  .weekdays {
-    font-size: 15px;
-    padding: 0 0 14px;
-    flex-shrink: 0;
   }
 
   .rest-tag,
