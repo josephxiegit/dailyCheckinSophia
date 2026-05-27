@@ -12,67 +12,69 @@
           :class="[isWide ? 'drawer-left' : 'popup-bottom', 'range-picker-box']"
           @click.stop
         >
-          <view class="popup-title">选择日期范围</view>
+          <scroll-view scroll-y class="popup-scroll">
+            <view class="popup-title">选择日期范围</view>
 
-          <picker
-            mode="date"
-            :value="startDate"
-            @change="(e) => (startDate = e.detail.value)"
-            @click.stop
-          >
-            <view class="date-row">
-              <text class="date-label">开始日期</text>
-              <view class="date-value">{{ startDate || "请选择" }}</view>
-            </view>
-          </picker>
-
-          <!-- 加上 @click.stop 阻止事件冒泡到 overlay -->
-          <picker
-            mode="date"
-            :value="endDate"
-            @change="(e) => (endDate = e.detail.value)"
-            @click.stop
-          >
-            <view class="date-row">
-              <text class="date-label">结束日期</text>
-              <view class="date-value">{{ endDate || "请选择" }}</view>
-            </view>
-          </picker>
-
-          <view
-            v-for="(range, index) in savedRanges"
-            :key="index"
-            class="saved-row"
-            @click="onSavedRowClick(range)"
-            @touchstart="onSavedRowTouchStart"
-            @touchend="(e) => onSavedRowTouchEnd(e, range)"
-          >
-            <view class="saved-info">
-              <view class="saved-main">
-                <text class="saved-label"
-                  >⭐ 常用{{ savedRanges.length > 1 ? index + 1 : "" }}：</text
-                >
-                <text class="saved-dates"
-                  >{{ range.startDate }} 至 {{ range.endDate }}</text
-                >
+            <picker
+              mode="date"
+              :value="startDate"
+              @change="(e) => (startDate = e.detail.value)"
+              @click.stop
+            >
+              <view class="date-row">
+                <text class="date-label">开始日期</text>
+                <view class="date-value">{{ startDate || "请选择" }}</view>
               </view>
-              <view
-                v-if="savedAmountDisplay(range) || savedStatusLabel(range)"
-                class="saved-meta"
-              >
-                <text v-if="savedAmountDisplay(range)" class="saved-meta-text"
-                  >金额：{{ savedAmountDisplay(range) }}</text
-                >
-                <text
-                  v-if="savedStatusLabel(range)"
-                  class="saved-status"
-                  :class="savedStatusClass(range)"
-                  >{{ savedStatusLabel(range) }}</text
-                >
+            </picker>
+
+            <!-- 加上 @click.stop 阻止事件冒泡到 overlay -->
+            <picker
+              mode="date"
+              :value="endDate"
+              @change="(e) => (endDate = e.detail.value)"
+              @click.stop
+            >
+              <view class="date-row">
+                <text class="date-label">结束日期</text>
+                <view class="date-value">{{ endDate || "请选择" }}</view>
               </view>
+            </picker>
+
+            <view
+              v-for="(range, index) in savedRanges"
+              :key="index"
+              class="saved-row"
+              @click="onSavedRowClick(range)"
+              @touchstart="onSavedRowTouchStart"
+              @touchend="(e) => onSavedRowTouchEnd(e, range)"
+            >
+              <view class="saved-info">
+                <view class="saved-main">
+                  <text class="saved-label"
+                    >⭐ 常用{{ savedRanges.length > 1 ? index + 1 : "" }}：</text
+                  >
+                  <text class="saved-dates"
+                    >{{ range.startDate }} 至 {{ range.endDate }}</text
+                  >
+                </view>
+                <view
+                  v-if="savedAmountDisplay(range) || savedStatusLabel(range)"
+                  class="saved-meta"
+                >
+                  <text v-if="savedAmountDisplay(range)" class="saved-meta-text"
+                    >金额：{{ savedAmountDisplay(range) }}</text
+                  >
+                  <text
+                    v-if="savedStatusLabel(range)"
+                    class="saved-status"
+                    :class="savedStatusClass(range)"
+                    >{{ savedStatusLabel(range) }}</text
+                  >
+                </view>
+              </view>
+              <view class="saved-btn-quick">直接查询</view>
             </view>
-            <view class="saved-btn-quick">直接查询</view>
-          </view>
+          </scroll-view>
 
           <view class="btn-row">
             <view class="btn-cancel" @click="showPicker = false">取消</view>
@@ -917,8 +919,19 @@ defineExpose({
   width: 100%;
   background: #fff;
   border-radius: 32rpx 32rpx 0 0;
-  padding: 40rpx 30rpx 60rpx;
+  padding: 40rpx 30rpx 0;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.popup-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.popup-box .btn-row {
+  padding: 30rpx 0 60rpx;
+  margin-top: 0;
 }
 .result-box {
   display: flex;
@@ -1213,7 +1226,7 @@ defineExpose({
 .drawer-left {
   width: 420px;
   max-width: 85vw;
-  height: 100vh;
+  height: 100dvh;
   border-radius: 0;
   display: flex;
   flex-direction: column;
@@ -1222,7 +1235,7 @@ defineExpose({
 .drawer-left.range-picker-box {
   width: 560px;
   max-width: 92vw;
-  padding: 40px 36px 44px;
+  padding: 40px 36px 0;
 }
 .drawer-left.range-picker-box .popup-title {
   font-size: 29px;
@@ -1266,7 +1279,16 @@ defineExpose({
   height: 0;
   margin-bottom: 20rpx;
 }
-.drawer-left .btn-row {
+.drawer-left.range-picker-box .btn-row {
+  margin-top: 0;
+  padding: 30px 0 44px;
+}
+.drawer-left .popup-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+}
+.drawer-left:not(.range-picker-box) .btn-row {
   margin-top: auto;
   padding-bottom: 20rpx;
 }
@@ -1334,13 +1356,11 @@ defineExpose({
 }
 
 .popup-bottom {
-  padding-bottom: calc(60rpx + constant(safe-area-inset-bottom));
-  padding-bottom: calc(60rpx + env(safe-area-inset-bottom));
+  padding-bottom: 0;
 }
 /* #ifdef MP-WEIXIN */
 .popup-bottom {
-  padding-bottom: calc(100rpx + constant(safe-area-inset-bottom));
-  padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
+  padding-bottom: 0;
 }
 /* #endif */
 

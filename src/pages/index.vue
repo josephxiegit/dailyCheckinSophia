@@ -17,6 +17,8 @@ page {
 .app-container {
   background-color: #f7f8fa;
   height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   overflow: hidden;
   position: fixed;
   top: 0;

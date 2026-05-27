@@ -17,6 +17,14 @@
       </view>
     </view>
 
+    <view class="coupon-banner remedy-banner">
+      <text class="coupon-text remedy-text">🛠️ 我的补救券：{{ remainingRemedyCoupons }} 张</text>
+      <view class="coupon-actions">
+        <view class="coupon-btn remedy-log" @click="openRemedyLogDialog">记录</view>
+        <view class="coupon-btn remedy-add" @click="onAddRemedyCouponClick">＋ 增加</view>
+      </view>
+    </view>
+
     <view class="card" :class="{ 'card--locked': isLockedReading && !isReadingExcluded }">
       <view class="card-title"><text class="card-icon">📖</text> 英语阅读</view>
       
@@ -31,28 +39,29 @@
       
       <block v-else>
         <view class="input-row">
-          <u-input v-model="form.readingStart" placeholder="开始页码" type="number" :disabled="!isEditable || isLockedReading" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+          <u-input v-model="form.readingStart" placeholder="开始页码" type="number" :disabled="!canEditReading || isLockedReading" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
           <text class="split">-</text>
-          <u-input v-model="form.readingEnd" placeholder="结束页码" type="number" :disabled="!isEditable || isLockedReading" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+          <u-input v-model="form.readingEnd" placeholder="结束页码" type="number" :disabled="!canEditReading || isLockedReading" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
         </view>
-        <view v-if="isEditable" class="card-action-wrap">
+        <view v-if="canEditReading || canUseRemedyReading" class="card-action-wrap">
           <view class="card-action-row">
-          <view v-if="isLockedReading" class="locked-action-block">
-            <u-button text="编辑阅读" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingReading = true"></u-button>
+          <view v-if="isLockedReading || needsRemedyReading" class="locked-action-block">
+            <u-button v-if="isEditable" text="编辑阅读" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingReading = true"></u-button>
+            <u-button v-else-if="canUseRemedyReading" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('reading')"></u-button>
             <text v-if="readingActionTime" class="status-time">保存于 {{ readingActionTime }}</text>
           </view>
           <block v-else>
             <view class="action-btn-block">
               <u-button text="保存阅读" color="#FF2D55" size="small" :loading="loadingReading" customStyle="border-radius: 40rpx; flex: 1;" @click="saveReading"></u-button>
             </view>
-            <view v-if="remainingCoupons > 0" class="action-btn-block action-btn-block--split">
+            <view v-if="isEditable && remainingCoupons > 0" class="action-btn-block action-btn-block--split">
               <u-button text="使用免除券" color="#FF9500" plain size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="useCoupon('reading')"></u-button>
             </view>
           </block>
         </view>
         </view>
       </block>
-      <view v-if="!isEditable && !isReadingExcluded && !isReadingCoupon" class="block-mask" @click="onBlockedTap"></view>
+      <view v-if="!canInteractReading && !isReadingExcluded && !isReadingCoupon" class="block-mask" @click="onBlockedTap"></view>
     </view>
 
     <view class="card" :class="{ 'card--locked': isLockedMath && !isMathExcluded }">
@@ -68,36 +77,37 @@
       </view>
       
       <block v-else>
-        <u-input v-model="form.mathTitle" placeholder="练习题目内容" :disabled="!isEditable || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
+        <u-input v-model="form.mathTitle" placeholder="练习题目内容" :disabled="!canEditMath || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
         <view class="time-row">
           <text class="label">时长：</text>
           <view class="time-input">
-            <u-input v-model="form.mathMin" type="number" placeholder="分" :disabled="!isEditable || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+            <u-input v-model="form.mathMin" type="number" placeholder="分" :disabled="!canEditMath || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
             <text>分</text>
           </view>
           <view class="time-input">
-            <u-input v-model="form.mathSec" type="number" placeholder="秒" :disabled="!isEditable || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+            <u-input v-model="form.mathSec" type="number" placeholder="秒" :disabled="!canEditMath || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
             <text>秒</text>
           </view>
         </view>
-        <view v-if="isEditable" class="card-action-wrap">
+        <view v-if="canEditMath || canUseRemedyMath" class="card-action-wrap">
           <view class="card-action-row">
-          <view v-if="isLockedMath" class="locked-action-block">
-            <u-button text="编辑数学" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingMath = true"></u-button>
+          <view v-if="isLockedMath || needsRemedyMath" class="locked-action-block">
+            <u-button v-if="isEditable" text="编辑数学" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingMath = true"></u-button>
+            <u-button v-else-if="canUseRemedyMath" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('math')"></u-button>
             <text v-if="mathActionTime" class="status-time">保存于 {{ mathActionTime }}</text>
           </view>
           <block v-else>
             <view class="action-btn-block">
               <u-button text="保存数学" color="#FF9500" size="small" :loading="loadingMath" customStyle="border-radius: 40rpx; flex: 1;" @click="saveMath"></u-button>
             </view>
-            <view v-if="remainingCoupons > 0" class="action-btn-block action-btn-block--split">
+            <view v-if="isEditable && remainingCoupons > 0" class="action-btn-block action-btn-block--split">
               <u-button text="使用免除券" color="#FF9500" plain size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="useCoupon('math')"></u-button>
             </view>
           </block>
         </view>
         </view>
       </block>
-      <view v-if="!isEditable && !isMathExcluded && !isMathCoupon" class="block-mask" @click="onBlockedTap"></view>
+      <view v-if="!canInteractMath && !isMathExcluded && !isMathCoupon" class="block-mask" @click="onBlockedTap"></view>
     </view>
 
     <view class="card" :class="{ 'card--locked': isLockedClass && !isClassExcluded }">
@@ -113,32 +123,33 @@
       </view>
 
       <block v-else>
-        <u-input v-model="form.classTitle" placeholder="课程标题" :disabled="!isEditable || isLockedClass" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
-        <view class="radio-row" :class="{ 'radio-row--locked': isLockedClass, 'radio-row--readonly': !isEditable }">
+        <u-input v-model="form.classTitle" placeholder="课程标题" :disabled="!canEditClass || isLockedClass" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
+        <view class="radio-row" :class="{ 'radio-row--locked': isLockedClass, 'radio-row--readonly': !canEditClass }">
           <u-radio-group v-model="form.classType" placement="row">
-            <u-radio label="上" name="上" :activeColor="isLockedClass || !isEditable ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
-            <u-radio label="下" name="下" :activeColor="isLockedClass || !isEditable ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
-            <u-radio label="全部" name="全部" :activeColor="isLockedClass || !isEditable ? '#bbbbbb' : '#34C759'"></u-radio>
+            <u-radio label="上" name="上" :activeColor="isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
+            <u-radio label="下" name="下" :activeColor="isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
+            <u-radio label="全部" name="全部" :activeColor="isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'"></u-radio>
           </u-radio-group>
         </view>
-        <view v-if="isEditable" class="card-action-wrap">
+        <view v-if="canEditClass || canUseRemedyClass" class="card-action-wrap">
           <view class="card-action-row">
-          <view v-if="isLockedClass" class="locked-action-block">
-            <u-button text="编辑网课" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingClass = true"></u-button>
+          <view v-if="isLockedClass || needsRemedyClass" class="locked-action-block">
+            <u-button v-if="isEditable" text="编辑网课" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingClass = true"></u-button>
+            <u-button v-else-if="canUseRemedyClass" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('class')"></u-button>
             <text v-if="classActionTime" class="status-time">保存于 {{ classActionTime }}</text>
           </view>
           <block v-else>
             <view class="action-btn-block">
               <u-button text="保存网课" color="#34C759" size="small" :loading="loadingClass" customStyle="border-radius: 40rpx; flex: 1;" @click="saveClass"></u-button>
             </view>
-            <view v-if="remainingCoupons > 0" class="action-btn-block action-btn-block--split">
+            <view v-if="isEditable && remainingCoupons > 0" class="action-btn-block action-btn-block--split">
               <u-button text="使用免除券" color="#FF9500" plain size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="useCoupon('class')"></u-button>
             </view>
           </block>
         </view>
         </view>
       </block>
-      <view v-if="!isEditable && !isClassExcluded && !isClassCoupon" class="block-mask" @click="onBlockedTap"></view>
+      <view v-if="!canInteractClass && !isClassExcluded && !isClassCoupon" class="block-mask" @click="onBlockedTap"></view>
     </view>
 
     <view v-if="isEditable && hasRecord" class="delete-row">
@@ -179,6 +190,19 @@
     </transition>
 
     <transition name="modal-anim">
+      <view v-if="showAddRemedyCouponDialog" class="overlay" @click="showAddRemedyCouponDialog = false">
+        <view class="pwd-box" @click.stop>
+          <view class="pwd-title">发放补救券</view>
+          <input class="pwd-input" type="number" placeholder="输入增加的张数" v-model="addRemedyCouponCount" />
+          <view class="btn-row">
+            <view class="btn-cancel" @click="showAddRemedyCouponDialog = false">取消</view>
+            <view class="btn-save remedy-save" @click="executeAddRemedyCoupon">确认发放</view>
+          </view>
+        </view>
+      </view>
+    </transition>
+
+    <transition name="modal-anim">
       <view v-if="showLogDialog" class="overlay" @click="showLogDialog = false">
         <view class="log-box" @click.stop>
           <view class="pwd-title">免除券明细</view>
@@ -200,6 +224,33 @@
           
           <view class="btn-row" style="margin-top: 20rpx;">
             <view class="btn-cancel" style="width: 100%" @click="showLogDialog = false">关闭</view>
+          </view>
+        </view>
+      </view>
+    </transition>
+
+    <transition name="modal-anim">
+      <view v-if="showRemedyLogDialog" class="overlay" @click="showRemedyLogDialog = false">
+        <view class="log-box" @click.stop>
+          <view class="pwd-title">补救券明细</view>
+          <scroll-view scroll-y class="log-scroll" @scrolltolower="loadMoreRemedyLogs">
+            <view class="log-item" v-for="item in remedyLogList" :key="item.id">
+              <view class="log-info">
+                <view class="log-detail">{{ item.detail }}</view>
+                <view class="log-time">{{ item.time }}</view>
+              </view>
+              <view class="log-amount remedy-amount" :class="item.amount > 0 ? 'positive' : 'negative'">
+                {{ item.amount > 0 ? '+' + item.amount : item.amount }}
+              </view>
+            </view>
+            
+            <view v-if="remedyLogList.length === 0 && !remedyLogLoading" class="empty-log">暂无记录</view>
+            <view v-else-if="!hasMoreRemedyLogs && remedyLogList.length > 0" class="no-more">到底啦</view>
+            <view v-else-if="remedyLogLoading" class="loading-more">加载中...</view>
+          </scroll-view>
+          
+          <view class="btn-row" style="margin-top: 20rpx;">
+            <view class="btn-cancel" style="width: 100%" @click="showRemedyLogDialog = false">关闭</view>
           </view>
         </view>
       </view>
@@ -238,6 +289,7 @@ const form = reactive({
 
 const exclusionsList = ref([]);
 const remainingCoupons = ref(0);
+const remainingRemedyCoupons = ref(0);
 const readingActionTime = ref("");
 const mathActionTime = ref("");
 const classActionTime = ref("");
@@ -252,6 +304,8 @@ let pwdSuccessCallback = null;
 
 const showAddCouponDialog = ref(false);
 const addCouponCount = ref("");
+const showAddRemedyCouponDialog = ref(false);
+const addRemedyCouponCount = ref("");
 
 // === 新增：日志弹窗数据状态 ===
 const showLogDialog = ref(false);
@@ -259,6 +313,11 @@ const logList = ref([]);
 const logPage = ref(1);
 const logLoading = ref(false);
 const hasMoreLogs = ref(true);
+const showRemedyLogDialog = ref(false);
+const remedyLogList = ref([]);
+const remedyLogPage = ref(1);
+const remedyLogLoading = ref(false);
+const hasMoreRemedyLogs = ref(true);
 // =============================
 
 const requirePassword = (callback) => {
@@ -291,6 +350,13 @@ const onAddCouponClick = () => {
   });
 };
 
+const onAddRemedyCouponClick = () => {
+  requirePassword(() => {
+    addRemedyCouponCount.value = "";
+    showAddRemedyCouponDialog.value = true;
+  });
+};
+
 const executeAddCoupon = () => {
   const count = parseInt(addCouponCount.value);
   if (!count || count <= 0) return uni.showToast({ title: '请输入正确张数', icon: 'none' });
@@ -313,6 +379,28 @@ const executeAddCoupon = () => {
   });
 };
 
+const executeAddRemedyCoupon = () => {
+  const count = parseInt(addRemedyCouponCount.value);
+  if (!count || count <= 0) return uni.showToast({ title: '请输入正确张数', icon: 'none' });
+  
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: { method: "addRemedyCoupon", count: count },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        showAddRemedyCouponDialog.value = false;
+        uni.showToast({ title: "发放成功", icon: "success" });
+        loadRemedyCoupons();
+      } else {
+        uni.showToast({ title: res.data?.msg || "发放失败", icon: "none" }); 
+      }
+    },
+    fail: () => uni.showToast({ title: "网络异常", icon: "none" })
+  });
+};
+
 const loadCoupons = () => {
   uni.request({
     url: `${Global.BASE_URL}/`,
@@ -322,6 +410,20 @@ const loadCoupons = () => {
     success: (res) => {
       if (res.data?.code === 0) {
         remainingCoupons.value = res.data.remaining;
+      }
+    },
+  });
+};
+
+const loadRemedyCoupons = () => {
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: { method: "getRemedyCoupon" },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        remainingRemedyCoupons.value = res.data.remaining;
       }
     },
   });
@@ -369,6 +471,44 @@ const loadMoreLogs = () => {
   if (hasMoreLogs.value) {
     logPage.value += 1;
     fetchLogs(false);
+  }
+};
+
+const fetchRemedyLogs = (isRefresh = false) => {
+  if (remedyLogLoading.value || !hasMoreRemedyLogs.value) return;
+  remedyLogLoading.value = true;
+  
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: { method: "getRemedyCouponLogs", page: remedyLogPage.value, size: 15 },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        const newData = res.data.data || [];
+        if (isRefresh) {
+          remedyLogList.value = newData;
+        } else {
+          remedyLogList.value = [...remedyLogList.value, ...newData];
+        }
+        hasMoreRemedyLogs.value = newData.length === 15;
+      }
+    },
+    complete: () => { remedyLogLoading.value = false; }
+  });
+};
+
+const openRemedyLogDialog = () => {
+  remedyLogPage.value = 1;
+  hasMoreRemedyLogs.value = true;
+  fetchRemedyLogs(true);
+  showRemedyLogDialog.value = true;
+};
+
+const loadMoreRemedyLogs = () => {
+  if (hasMoreRemedyLogs.value) {
+    remedyLogPage.value += 1;
+    fetchRemedyLogs(false);
   }
 };
 // =============================
@@ -422,6 +562,19 @@ const hasClass   = computed(() => !!(props.dayRecord?.class_title));
 const isLockedReading = computed(() => hasReading.value && !editingReading.value);
 const isLockedMath    = computed(() => hasMath.value    && !editingMath.value);
 const isLockedClass   = computed(() => hasClass.value   && !editingClass.value);
+const hasRemedyCoupon = computed(() => remainingRemedyCoupons.value > 0);
+const canUseRemedyReading = computed(() => !isEditable.value && hasRemedyCoupon.value && !isReadingCoupon.value && !isReadingExcluded.value);
+const canUseRemedyMath = computed(() => !isEditable.value && hasRemedyCoupon.value && !isMathCoupon.value && !isMathExcluded.value);
+const canUseRemedyClass = computed(() => !isEditable.value && hasRemedyCoupon.value && !isClassCoupon.value && !isClassExcluded.value);
+const canEditReading = computed(() => isEditable.value || editingReading.value);
+const canEditMath = computed(() => isEditable.value || editingMath.value);
+const canEditClass = computed(() => isEditable.value || editingClass.value);
+const needsRemedyReading = computed(() => !canEditReading.value && canUseRemedyReading.value);
+const needsRemedyMath = computed(() => !canEditMath.value && canUseRemedyMath.value);
+const needsRemedyClass = computed(() => !canEditClass.value && canUseRemedyClass.value);
+const canInteractReading = computed(() => isEditable.value || editingReading.value || canUseRemedyReading.value);
+const canInteractMath = computed(() => isEditable.value || editingMath.value || canUseRemedyMath.value);
+const canInteractClass = computed(() => isEditable.value || editingClass.value || canUseRemedyClass.value);
 
 const formatTimeValue = (val) => {
   if (val === undefined || val === null) return '';
@@ -456,6 +609,7 @@ watch(
     populate(record); 
     loadExclusions(); 
     loadCoupons();
+    loadRemedyCoupons();
   },
   { immediate: true }
 );
@@ -525,6 +679,13 @@ const responseOk = (res) => {
   return false;
 };
 
+const sectionLabel = (sectionName) => {
+  if (sectionName === 'reading') return '阅读';
+  if (sectionName === 'math') return '数学';
+  if (sectionName === 'class') return '网课';
+  return '该项';
+};
+
 // 使用免除券
 const useCoupon = (sectionName) => {
   uni.showModal({
@@ -550,6 +711,32 @@ const useCoupon = (sectionName) => {
           }
         });
       }
+    }
+  });
+};
+
+const useRemedyCoupon = (sectionName) => {
+  uni.showModal({
+    title: '确认补救',
+    content: `要消耗 1 张补救券来编辑 ${formattedDate.value} 的${sectionLabel(sectionName)}吗？一张补救券只能补救这一项。`,
+    confirmColor: '#5856D6',
+    success: (res) => {
+      if (!res.confirm) return;
+      uni.request({
+        url: `${Global.BASE_URL}/`,
+        method: 'POST',
+        data: { method: 'useRemedyCoupon', section: sectionName, date: formatDate(props.selectedDate) },
+        header: { 'content-type': 'application/x-www-form-urlencoded' },
+        success: (resp) => {
+          if (responseOk(resp)) {
+            if (sectionName === 'reading') editingReading.value = true;
+            if (sectionName === 'math') editingMath.value = true;
+            if (sectionName === 'class') editingClass.value = true;
+            uni.showToast({ title: '已开启补救编辑', icon: 'none' });
+            loadRemedyCoupons();
+          }
+        }
+      });
     }
   });
 };
@@ -581,7 +768,7 @@ const saveReading = () => {
     url: `${Global.BASE_URL}/`, method: 'POST',
     data: { method: 'saveStudyRecord', section: 'reading', date: formatDate(props.selectedDate), readingStart: form.readingStart, readingEnd: form.readingEnd },
     header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { readingActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingReading.value = false; emit('saved', formatDate(props.selectedDate)); } },
+    success: (res) => { if (responseOk(res)) { readingActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingReading.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
     complete: () => { loadingReading.value = false; }
   });
 };
@@ -593,7 +780,7 @@ const saveMath = () => {
     url: `${Global.BASE_URL}/`, method: 'POST',
     data: { method: 'saveStudyRecord', section: 'math', date: formatDate(props.selectedDate), mathTitle: form.mathTitle, mathMin: form.mathMin, mathSec: form.mathSec },
     header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { mathActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingMath.value = false; emit('saved', formatDate(props.selectedDate)); } },
+    success: (res) => { if (responseOk(res)) { mathActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingMath.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
     complete: () => { loadingMath.value = false; }
   });
 };
@@ -605,7 +792,7 @@ const saveClass = () => {
     url: `${Global.BASE_URL}/`, method: 'POST',
     data: { method: 'saveStudyRecord', section: 'class', date: formatDate(props.selectedDate), classTitle: form.classTitle, classType: form.classType },
     header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { classActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingClass.value = false; emit('saved', formatDate(props.selectedDate)); } },
+    success: (res) => { if (responseOk(res)) { classActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingClass.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
     complete: () => { loadingClass.value = false; }
   });
 };
@@ -648,7 +835,12 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.entry-container { padding: 30rpx 20rpx; }
+.entry-container {
+  padding: 30rpx 20rpx;
+  /* 兼顾 iPad / iPhone Safari 底部工具栏：用安全区 + 少量缓冲，防止最后一行被遮挡 */
+  padding-bottom: calc(40rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+}
 
 .complete-feedback {
   position: fixed; inset: 0; z-index: 9999;
@@ -675,6 +867,15 @@ onUnmounted(() => {
   .coupon-btn.add { color: #fff; background: #FF9500; }
   .coupon-btn.log { color: #FF9500; background: #FFF3E0; border: 1px solid #FFD180; }
 }
+
+.remedy-banner {
+  background: #F4F4FF;
+  border-color: #D8D7FF;
+  margin-top: -16rpx;
+}
+.coupon-banner .remedy-text { color: #5856D6; }
+.coupon-banner .coupon-btn.remedy-add { color: #fff; background: #5856D6; }
+.coupon-banner .coupon-btn.remedy-log { color: #5856D6; background: #ECEBFF; border: 1px solid #D8D7FF; }
 
 .coupon-tip {
   display: flex; flex-direction: column; gap: 12rpx;
@@ -752,6 +953,9 @@ onUnmounted(() => {
 .log-amount { font-size: 36rpx; font-weight: bold; }
 .log-amount.positive { color: #FF9500; }
 .log-amount.negative { color: #34C759; } /* 消耗显示绿色 */
+.remedy-amount.positive { color: #5856D6; }
+.remedy-amount.negative { color: #34C759; }
+.remedy-save { background: #5856D6; }
 .empty-log, .no-more { text-align: center; font-size: 24rpx; color: #ccc; padding: 30rpx 0; }
 .loading-more { text-align: center; font-size: 24rpx; color: #999; padding: 20rpx 0; }
 /* ================================== */
@@ -767,8 +971,17 @@ onUnmounted(() => {
 @keyframes popOut { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0; } }
 
 @media (min-width: 1024px) {
-  .entry-container { padding: 24px 10px; :deep(input), :deep(.u-input__content__field-wrapper__field), :deep(.u-radio__text), .label, .time-input text, .split { font-size: 18px !important; } .date-banner { padding: 20px 24px; .date-label { font-size: 22px; } .edit-hint { font-size: 15px; } } .card { padding: 30px; margin-bottom: 24px; .card-title { font-size: 20px; margin-bottom: 24px; .card-icon { font-size: 24px; } } } :deep(.u-button__text) { font-size: 16px !important; } .locked-action-block :deep(.u-button) { min-height: 54px !important; width: 100% !important; flex: unset !important; padding-left: 0 !important; padding-right: 0 !important; }
-  .locked-action-block :deep(.u-button__text) { font-size: 20px !important; } .status-time { font-size: 14px; } }
+  .entry-container { 
+    padding: 24px 10px; 
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    :deep(input), :deep(.u-input__content__field-wrapper__field), :deep(.u-radio__text), .label, .time-input text, .split { font-size: 18px !important; } 
+    .date-banner { padding: 20px 24px; .date-label { font-size: 22px; } .edit-hint { font-size: 15px; } } 
+    .card { padding: 30px; margin-bottom: 24px; .card-title { font-size: 20px; margin-bottom: 24px; .card-icon { font-size: 24px; } } } 
+    :deep(.u-button__text) { font-size: 16px !important; } 
+    .locked-action-block :deep(.u-button) { min-height: 54px !important; width: 100% !important; flex: unset !important; padding-left: 0 !important; padding-right: 0 !important; }
+    .locked-action-block :deep(.u-button__text) { font-size: 20px !important; } 
+    .status-time { font-size: 14px; }
+  }
   .complete-image { width: min(32vw, 520px); max-width: 520px; }
 }
 </style>

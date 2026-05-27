@@ -233,6 +233,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   background: #f7f7f7;
   overflow: hidden;
   position: fixed;
@@ -249,6 +251,8 @@ onUnmounted(() => {
 
 .desktop-layout {
   height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -312,17 +316,26 @@ onUnmounted(() => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-bottom: calc(96px + constant(safe-area-inset-bottom));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 窄屏（手机）样式完全保留 */
 .mobile-layout {
   height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   overflow: hidden;
 }
 .wrapper {
   height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   background: #f7f7f7;
   padding: 20rpx;
+  padding-bottom: 0;
   box-sizing: border-box;
 }
 
@@ -335,6 +348,8 @@ onUnmounted(() => {
 
 :deep(.entry-container) {
   padding: 0;
+  padding-bottom: calc(100rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(100rpx + env(safe-area-inset-bottom));
 }
 
 :deep(.entry-container .date-banner) {

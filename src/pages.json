@@ -12,7 +12,7 @@
     "backgroundTextStyle": "@bgTxtStyle",
     "navigationBarBackgroundColor": "#000000",
     "navigationBarTextStyle": "@navTxtStyle",
-    "navigationBarTitleText": "Uni Creator",
+    "navigationBarTitleText": "dailycheck sophia",
     "navigationStyle": "custom"
   },
   "subPackages": []
