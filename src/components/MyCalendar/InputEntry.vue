@@ -48,7 +48,7 @@
           <view v-if="isLockedReading || needsRemedyReading" class="locked-action-block">
             <u-button v-if="isEditable" text="编辑阅读" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingReading = true"></u-button>
             <u-button v-else-if="canUseRemedyReading" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('reading')"></u-button>
-            <text v-if="readingActionTime" class="status-time">保存于 {{ readingActionTime }}</text>
+            <text v-if="readingStatusText" class="status-time">{{ readingStatusText }}</text>
           </view>
           <block v-else>
             <view class="action-btn-block">
@@ -94,7 +94,7 @@
           <view v-if="isLockedMath || needsRemedyMath" class="locked-action-block">
             <u-button v-if="isEditable" text="编辑数学" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingMath = true"></u-button>
             <u-button v-else-if="canUseRemedyMath" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('math')"></u-button>
-            <text v-if="mathActionTime" class="status-time">保存于 {{ mathActionTime }}</text>
+            <text v-if="mathStatusText" class="status-time">{{ mathStatusText }}</text>
           </view>
           <block v-else>
             <view class="action-btn-block">
@@ -136,7 +136,7 @@
           <view v-if="isLockedClass || needsRemedyClass" class="locked-action-block">
             <u-button v-if="isEditable" text="编辑网课" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingClass = true"></u-button>
             <u-button v-else-if="canUseRemedyClass" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('class')"></u-button>
-            <text v-if="classActionTime" class="status-time">保存于 {{ classActionTime }}</text>
+            <text v-if="classStatusText" class="status-time">{{ classStatusText }}</text>
           </view>
           <block v-else>
             <view class="action-btn-block">
@@ -296,6 +296,10 @@ const classActionTime = ref("");
 const readingCouponActionTime = ref("");
 const mathCouponActionTime = ref("");
 const classCouponActionTime = ref("");
+// 补救券使用信息
+const readingRemedyUsedAt = ref("");
+const mathRemedyUsedAt = ref("");
+const classRemedyUsedAt = ref("");
 
 // 安全弹窗逻辑
 const showPwdDialog = ref(false);
@@ -549,6 +553,13 @@ const isEditable = computed(() => {
       || sel.getTime() === tomorrow.getTime();
 });
 
+const isFutureDate = computed(() => {
+  if (!props.selectedDate) return false;
+  const sel       = new Date(props.selectedDate); sel.setHours(0,0,0,0);
+  const today     = new Date(); today.setHours(0,0,0,0);
+  return sel.getTime() > today.getTime();
+});
+
 const formattedDate = computed(() => {
   const d = props.selectedDate;
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
@@ -563,9 +574,9 @@ const isLockedReading = computed(() => hasReading.value && !editingReading.value
 const isLockedMath    = computed(() => hasMath.value    && !editingMath.value);
 const isLockedClass   = computed(() => hasClass.value   && !editingClass.value);
 const hasRemedyCoupon = computed(() => remainingRemedyCoupons.value > 0);
-const canUseRemedyReading = computed(() => !isEditable.value && hasRemedyCoupon.value && !isReadingCoupon.value && !isReadingExcluded.value);
-const canUseRemedyMath = computed(() => !isEditable.value && hasRemedyCoupon.value && !isMathCoupon.value && !isMathExcluded.value);
-const canUseRemedyClass = computed(() => !isEditable.value && hasRemedyCoupon.value && !isClassCoupon.value && !isClassExcluded.value);
+const canUseRemedyReading = computed(() => !isEditable.value && !isFutureDate.value && hasRemedyCoupon.value && !isReadingCoupon.value && !isReadingExcluded.value);
+const canUseRemedyMath = computed(() => !isEditable.value && !isFutureDate.value && hasRemedyCoupon.value && !isMathCoupon.value && !isMathExcluded.value);
+const canUseRemedyClass = computed(() => !isEditable.value && !isFutureDate.value && hasRemedyCoupon.value && !isClassCoupon.value && !isClassExcluded.value);
 const canEditReading = computed(() => isEditable.value || editingReading.value);
 const canEditMath = computed(() => isEditable.value || editingMath.value);
 const canEditClass = computed(() => isEditable.value || editingClass.value);
@@ -575,6 +586,9 @@ const needsRemedyClass = computed(() => !canEditClass.value && canUseRemedyClass
 const canInteractReading = computed(() => isEditable.value || editingReading.value || canUseRemedyReading.value);
 const canInteractMath = computed(() => isEditable.value || editingMath.value || canUseRemedyMath.value);
 const canInteractClass = computed(() => isEditable.value || editingClass.value || canUseRemedyClass.value);
+const readingStatusText = computed(() => readingRemedyUsedAt.value ? `补救日期：${readingRemedyUsedAt.value}` : (readingActionTime.value ? `保存于 ${readingActionTime.value}` : ''));
+const mathStatusText = computed(() => mathRemedyUsedAt.value ? `补救日期：${mathRemedyUsedAt.value}` : (mathActionTime.value ? `保存于 ${mathActionTime.value}` : ''));
+const classStatusText = computed(() => classRemedyUsedAt.value ? `补救日期：${classRemedyUsedAt.value}` : (classActionTime.value ? `保存于 ${classActionTime.value}` : ''));
 
 const formatTimeValue = (val) => {
   if (val === undefined || val === null) return '';
@@ -597,6 +611,11 @@ const populate = (record) => {
   if (record?.reading_coupon_used_at !== undefined) readingCouponActionTime.value = formatActionTime(record.reading_coupon_used_at);
   if (record?.math_coupon_used_at !== undefined) mathCouponActionTime.value = formatActionTime(record.math_coupon_used_at);
   if (record?.class_coupon_used_at !== undefined) classCouponActionTime.value = formatActionTime(record.class_coupon_used_at);
+  
+  // 处理补救信息
+  readingRemedyUsedAt.value = formatActionTime(record?.remedy?.reading?.saved_at || record?.remedy?.reading?.used_at || '');
+  mathRemedyUsedAt.value = formatActionTime(record?.remedy?.math?.saved_at || record?.remedy?.math?.used_at || '');
+  classRemedyUsedAt.value = formatActionTime(record?.remedy?.class?.saved_at || record?.remedy?.class?.used_at || '');
   
   editingReading.value = false;
   editingMath.value    = false;
@@ -763,36 +782,39 @@ const onRevokeClick = (sectionName) => {
 
 const saveReading = () => {
   if (!validateReading()) return;
+  const wasRemedyEdit = !isEditable.value && editingReading.value;
   loadingReading.value = true;
   uni.request({
     url: `${Global.BASE_URL}/`, method: 'POST',
     data: { method: 'saveStudyRecord', section: 'reading', date: formatDate(props.selectedDate), readingStart: form.readingStart, readingEnd: form.readingEnd },
     header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { readingActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingReading.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
+    success: (res) => { if (responseOk(res)) { readingActionTime.value = formatActionTime(res.data?.actionTime); if (wasRemedyEdit) readingRemedyUsedAt.value = formatActionTime(res.data?.remedyTime || res.data?.actionTime); showSaveComplete(); editingReading.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
     complete: () => { loadingReading.value = false; }
   });
 };
 
 const saveMath = () => {
   if (!validateMath()) return;
+  const wasRemedyEdit = !isEditable.value && editingMath.value;
   loadingMath.value = true;
   uni.request({
     url: `${Global.BASE_URL}/`, method: 'POST',
     data: { method: 'saveStudyRecord', section: 'math', date: formatDate(props.selectedDate), mathTitle: form.mathTitle, mathMin: form.mathMin, mathSec: form.mathSec },
     header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { mathActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingMath.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
+    success: (res) => { if (responseOk(res)) { mathActionTime.value = formatActionTime(res.data?.actionTime); if (wasRemedyEdit) mathRemedyUsedAt.value = formatActionTime(res.data?.remedyTime || res.data?.actionTime); showSaveComplete(); editingMath.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
     complete: () => { loadingMath.value = false; }
   });
 };
 
 const saveClass = () => {
   if (!validateClass()) return;
+  const wasRemedyEdit = !isEditable.value && editingClass.value;
   loadingClass.value = true;
   uni.request({
     url: `${Global.BASE_URL}/`, method: 'POST',
     data: { method: 'saveStudyRecord', section: 'class', date: formatDate(props.selectedDate), classTitle: form.classTitle, classType: form.classType },
     header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { classActionTime.value = formatActionTime(res.data?.actionTime); showSaveComplete(); editingClass.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
+    success: (res) => { if (responseOk(res)) { classActionTime.value = formatActionTime(res.data?.actionTime); if (wasRemedyEdit) classRemedyUsedAt.value = formatActionTime(res.data?.remedyTime || res.data?.actionTime); showSaveComplete(); editingClass.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
     complete: () => { loadingClass.value = false; }
   });
 };

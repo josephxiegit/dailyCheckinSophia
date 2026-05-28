@@ -49,6 +49,31 @@ class DailyCheckinAPIView(APIView):
             if section == 'class':
                 return record.class_title == '媛媛免除'
             return False
+
+        def merge_remedy_log_fallback(remedy_dict, logs):
+            section_name_map = {
+                '英语阅读': 'reading',
+                '数学练习': 'math',
+                '英语网课': 'class',
+            }
+            for log in logs:
+                detail = log.get('detail') or ''
+                if not detail.startswith('使用补救: '):
+                    continue
+                parts = detail.replace('使用补救: ', '', 1).split()
+                if len(parts) < 2:
+                    continue
+                date_str = parts[0]
+                section = section_name_map.get(parts[1])
+                if not section:
+                    continue
+                if date_str not in remedy_dict:
+                    remedy_dict[date_str] = {}
+                existing = remedy_dict[date_str].get(section, {})
+                remedy_dict[date_str][section] = {
+                    'used_at': existing.get('used_at') or format_dt(log.get('create_time')),
+                    'saved_at': existing.get('saved_at') or format_dt(log.get('create_time')),
+                }
             
         if method == 'saveStudyRecord':
             try:
@@ -93,17 +118,21 @@ class DailyCheckinAPIView(APIView):
                     date=target_date, 
                     defaults=update_defaults
                 )
+                remedy_time = ''
                 if not is_frontend_editable_date(target_date):
-                    RemedyCouponUsage.objects.using('checkindb').filter(
+                    remedy_saved_count = RemedyCouponUsage.objects.using('checkindb').filter(
                         date=target_date,
                         section=section,
                         saved_at__isnull=True
                     ).update(saved_at=now)
+                    if remedy_saved_count:
+                        remedy_time = format_dt(now)
                 print(f"数据保存成功！日期：{obj.date}, 模块：{section}, 是否新创建：{created}")
                 return JsonResponse({
                     'code': 0,
                     'msg': '保存成功',
-                    'actionTime': format_dt(getattr(obj, f'{section}_saved_at', None))
+                    'actionTime': format_dt(getattr(obj, f'{section}_saved_at', None)),
+                    'remedyTime': remedy_time
                 })
             except Exception as e:
                 print(f"数据库写入失败: {e}")
@@ -125,6 +154,29 @@ class DailyCheckinAPIView(APIView):
                         'reading_coupon_used_at', 'math_coupon_used_at', 'class_coupon_used_at'
                     )
                 )
+                # 获取该月的补救券使用记录
+                remedy_usages = RemedyCouponUsage.objects.using('checkindb').filter(
+                    date__year=year,
+                    date__month=month
+                ).values('date', 'section', 'used_at', 'saved_at')
+                
+                # 构建补救记录字典
+                remedy_dict = {}
+                for usage in remedy_usages:
+                    date_str = str(usage['date'])
+                    if date_str not in remedy_dict:
+                        remedy_dict[date_str] = {}
+                    remedy_dict[date_str][usage['section']] = {
+                            'used_at': format_dt(usage['used_at']),
+                            'saved_at': format_dt(usage['saved_at'])
+                        }
+
+                remedy_logs = RemedyCouponLog.objects.using('checkindb').filter(
+                    action='use',
+                    detail__contains=f"{year}-{str(month).zfill(2)}"
+                ).values('detail', 'create_time')
+                merge_remedy_log_fallback(remedy_dict, remedy_logs)
+                
                 data = {}
                 for r in records:
                     row = dict(r)
@@ -134,7 +186,15 @@ class DailyCheckinAPIView(APIView):
                     row['reading_coupon_used_at'] = format_dt(row.get('reading_coupon_used_at'))
                     row['math_coupon_used_at'] = format_dt(row.get('math_coupon_used_at'))
                     row['class_coupon_used_at'] = format_dt(row.get('class_coupon_used_at'))
-                    data[str(r['date'])] = row
+                    
+                    # 添加补救券信息
+                    date_str = str(r['date'])
+                    if date_str in remedy_dict:
+                        row['remedy'] = remedy_dict[date_str]
+                    else:
+                        row['remedy'] = {}
+                        
+                    data[date_str] = row
                 # 以 "YYYY-MM-DD" 字符串为 key，方便前端直接查找
                 return JsonResponse({'code': 0, 'data': data})
             except Exception as e:
@@ -182,6 +242,29 @@ class DailyCheckinAPIView(APIView):
                         'reading_saved_at', 'math_saved_at', 'class_saved_at',
                         'reading_coupon_used_at', 'math_coupon_used_at', 'class_coupon_used_at')
                 )
+                
+                # 获取该日期范围的补救券使用记录
+                remedy_usages = RemedyCouponUsage.objects.using('checkindb').filter(
+                    date__gte=start_date,
+                    date__lte=end_date
+                ).values('date', 'section', 'used_at', 'saved_at')
+                
+                # 构建补救记录字典
+                remedy_dict = {}
+                for usage in remedy_usages:
+                    date_str = str(usage['date'])
+                    if date_str not in remedy_dict:
+                        remedy_dict[date_str] = {}
+                    remedy_dict[date_str][usage['section']] = {
+                            'used_at': format_dt(usage['used_at']),
+                            'saved_at': format_dt(usage['saved_at'])
+                        }
+
+                remedy_logs = RemedyCouponLog.objects.using('checkindb').filter(
+                    action='use'
+                ).values('detail', 'create_time')
+                merge_remedy_log_fallback(remedy_dict, remedy_logs)
+                
                 data = []
                 for r in records:
                     row = dict(r)
@@ -192,6 +275,14 @@ class DailyCheckinAPIView(APIView):
                     row['reading_coupon_used_at'] = format_dt(row.get('reading_coupon_used_at'))
                     row['math_coupon_used_at'] = format_dt(row.get('math_coupon_used_at'))
                     row['class_coupon_used_at'] = format_dt(row.get('class_coupon_used_at'))
+                    
+                    # 添加补救券信息
+                    date_str = str(r['date'])
+                    if date_str in remedy_dict:
+                        row['remedy'] = remedy_dict[date_str]
+                    else:
+                        row['remedy'] = {}
+                        
                     data.append(row)
                 return JsonResponse({'code': 0, 'data': data})
             except Exception as e:
