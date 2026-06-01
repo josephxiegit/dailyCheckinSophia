@@ -820,6 +820,25 @@ class RemedyCouponLog(models.Model):
         db_table = 'app01_remedycouponlog'
         ordering = ['-create_time']
 
+class CouponBatch(models.Model):
+    """
+    把一批券绑定到「区间记录」里的某个常用时间段（savedDateRange）。
+    一行 = 一个 (券类型, 日期区间)；这批券只能用在 [start_date, end_date] 内。
+    取代原 CouponData / RemedyCouponData 的全局计数。
+    """
+    nid = models.AutoField(primary_key=True)
+    coupon_type = models.CharField(max_length=10, verbose_name="券类型")  # 'exempt' 免除券 | 'remedy' 补救券
+    start_date = models.DateField(verbose_name="绑定区间开始日期")
+    end_date = models.DateField(verbose_name="绑定区间结束日期")
+    total_coupons = models.IntegerField(default=0, verbose_name="发放总数")
+    used_coupons = models.IntegerField(default=0, verbose_name="已用数量")
+
+    class Meta:
+        app_label = 'app01'
+        db_table = 'app01_couponbatch'
+        ordering = ['end_date']
+
+
 class RemedyCouponUsage(models.Model):
     """
     记录补救券开启编辑权限的具体日期和项目

@@ -1,155 +1,400 @@
 <template>
   <view class="entry-container">
     <view v-if="showCompleteFeedback" class="complete-feedback">
-      <image class="complete-image" src="/static/review_complete.jpeg" mode="widthFix" />
+      <image
+        class="complete-image"
+        src="/static/review_complete.jpeg"
+        mode="widthFix"
+      />
     </view>
 
     <view class="date-banner" :class="{ 'readonly-banner': !isEditable }">
       <text class="date-label">{{ formattedDate }}</text>
-      <text class="edit-hint">{{ isEditable ? '✏️ 可编辑' : '👁 仅查看（只支持前天到明天）' }}</text>
+      <text class="edit-hint">{{
+        isEditable ? "✏️ 可编辑" : "👁 仅查看（只支持前天到明天）"
+      }}</text>
     </view>
 
     <view class="coupon-banner">
-      <text class="coupon-text">🎟️ 我的免除券：{{ remainingCoupons }} 张</text>
+      <view class="coupon-left">
+        <text class="coupon-title">🎟️ 我的免除券</text>
+        <text class="coupon-sub"
+          >{{ remainingCoupons }} 张 · 本区间可用
+          {{ currentExemptAvailable }} 张</text
+        >
+      </view>
       <view class="coupon-actions">
-        <view class="coupon-btn log" @click="openLogDialog">记录</view>
-        <view class="coupon-btn add" @click="onAddCouponClick">＋ 增加</view>
+        <view class="coupon-btn log" @click="openLogDialog">
+          <text class="btn-icon">📋</text><text class="btn-label">记录</text>
+        </view>
+        <view class="coupon-btn add" @click="onAddCouponClick">
+          <text class="btn-icon">＋</text><text class="btn-label">增加</text>
+        </view>
+        <view class="coupon-btn del" @click="onReduceCouponClick">
+          <text class="btn-icon">－</text><text class="btn-label">删除</text>
+        </view>
       </view>
     </view>
 
     <view class="coupon-banner remedy-banner">
-      <text class="coupon-text remedy-text">🛠️ 我的补救券：{{ remainingRemedyCoupons }} 张</text>
+      <view class="coupon-left">
+        <text class="coupon-title remedy-title">🛠️ 我的补救券</text>
+        <text class="coupon-sub remedy-sub"
+          >{{ remainingRemedyCoupons }} 张 · 本区间可用
+          {{ currentRemedyAvailable }} 张</text
+        >
+      </view>
       <view class="coupon-actions">
-        <view class="coupon-btn remedy-log" @click="openRemedyLogDialog">记录</view>
-        <view class="coupon-btn remedy-add" @click="onAddRemedyCouponClick">＋ 增加</view>
+        <view class="coupon-btn remedy-log" @click="openRemedyLogDialog">
+          <text class="btn-icon">📋</text><text class="btn-label">记录</text>
+        </view>
+        <view class="coupon-btn remedy-add" @click="onAddRemedyCouponClick">
+          <text class="btn-icon">＋</text><text class="btn-label">增加</text>
+        </view>
+        <view class="coupon-btn del" @click="onReduceRemedyCouponClick">
+          <text class="btn-icon">－</text><text class="btn-label">删除</text>
+        </view>
       </view>
     </view>
 
-    <view class="card" :class="{ 'card--locked': isLockedReading && !isReadingExcluded }">
+    <view
+      class="card"
+      :class="{ 'card--locked': isLockedReading && !isReadingExcluded }"
+    >
       <view class="card-title"><text class="card-icon">📖</text> 英语阅读</view>
-      
-      <view v-if="isReadingExcluded" class="excluded-tip"><text>✅ 已免除</text></view>
+
+      <view v-if="isReadingExcluded" class="excluded-tip"
+        ><text>✅ 已免除</text></view
+      >
       <view v-else-if="isReadingCoupon" class="coupon-tip">
         <view class="coupon-tip-main">
           <text>🎟️ 媛媛免除</text>
           <text class="revoke-btn" @click="onRevokeClick('reading')">撤销</text>
         </view>
-        <text v-if="readingCouponActionTime" class="status-time">使用于 {{ readingCouponActionTime }}</text>
+        <text v-if="readingCouponActionTime" class="status-time"
+          >使用于 {{ readingCouponActionTime }}</text
+        >
       </view>
-      
+
       <block v-else>
         <view class="input-row">
-          <u-input v-model="form.readingStart" placeholder="开始页码" type="number" :disabled="!canEditReading || isLockedReading" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+          <u-input
+            v-model="form.readingStart"
+            placeholder="开始页码"
+            type="number"
+            :disabled="!canEditReading || isLockedReading"
+            :border="false"
+            customStyle="border-bottom: 1px solid #f0f0f0;"
+          ></u-input>
           <text class="split">-</text>
-          <u-input v-model="form.readingEnd" placeholder="结束页码" type="number" :disabled="!canEditReading || isLockedReading" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+          <u-input
+            v-model="form.readingEnd"
+            placeholder="结束页码"
+            type="number"
+            :disabled="!canEditReading || isLockedReading"
+            :border="false"
+            customStyle="border-bottom: 1px solid #f0f0f0;"
+          ></u-input>
         </view>
-        <view v-if="canEditReading || canUseRemedyReading" class="card-action-wrap">
+        <view
+          v-if="canEditReading || canUseRemedyReading"
+          class="card-action-wrap"
+        >
           <view class="card-action-row">
-          <view v-if="isLockedReading || needsRemedyReading" class="locked-action-block">
-            <u-button v-if="isEditable" text="编辑阅读" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingReading = true"></u-button>
-            <u-button v-else-if="canUseRemedyReading" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('reading')"></u-button>
-            <text v-if="readingStatusText" class="status-time">{{ readingStatusText }}</text>
+            <view
+              v-if="isLockedReading || needsRemedyReading"
+              class="locked-action-block"
+            >
+              <u-button
+                v-if="isEditable"
+                text="编辑阅读"
+                color="#bbbbbb"
+                size="small"
+                customStyle="border-radius: 16rpx; width: 100%;"
+                @click="editingReading = true"
+              ></u-button>
+              <u-button
+                v-else-if="canUseRemedyReading"
+                text="使用补救券"
+                color="#5856D6"
+                plain
+                size="small"
+                customStyle="border-radius: 16rpx; width: 100%;"
+                @click="useRemedyCoupon('reading')"
+              ></u-button>
+              <text v-if="readingStatusText" class="status-time">{{
+                readingStatusText
+              }}</text>
+            </view>
+            <block v-else>
+              <view class="action-btn-block">
+                <u-button
+                  text="保存阅读"
+                  color="#FF2D55"
+                  size="small"
+                  :loading="loadingReading"
+                  customStyle="border-radius: 40rpx; flex: 1;"
+                  @click="saveReading"
+                ></u-button>
+              </view>
+              <view
+                v-if="isEditable && currentExemptAvailable > 0"
+                class="action-btn-block action-btn-block--split"
+              >
+                <u-button
+                  text="使用免除券"
+                  color="#FF9500"
+                  plain
+                  size="small"
+                  customStyle="border-radius: 40rpx; flex: 1;"
+                  @click="useCoupon('reading')"
+                ></u-button>
+              </view>
+            </block>
           </view>
-          <block v-else>
-            <view class="action-btn-block">
-              <u-button text="保存阅读" color="#FF2D55" size="small" :loading="loadingReading" customStyle="border-radius: 40rpx; flex: 1;" @click="saveReading"></u-button>
-            </view>
-            <view v-if="isEditable && remainingCoupons > 0" class="action-btn-block action-btn-block--split">
-              <u-button text="使用免除券" color="#FF9500" plain size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="useCoupon('reading')"></u-button>
-            </view>
-          </block>
-        </view>
         </view>
       </block>
-      <view v-if="!canInteractReading && !isReadingExcluded && !isReadingCoupon" class="block-mask" @click="onBlockedTap"></view>
+      <view
+        v-if="!canInteractReading && !isReadingExcluded && !isReadingCoupon"
+        class="block-mask"
+        @click="onBlockedTap"
+      ></view>
     </view>
 
-    <view class="card" :class="{ 'card--locked': isLockedMath && !isMathExcluded }">
+    <view
+      class="card"
+      :class="{ 'card--locked': isLockedMath && !isMathExcluded }"
+    >
       <view class="card-title"><text class="card-icon">🔢</text> 数学练习</view>
 
-      <view v-if="isMathExcluded" class="excluded-tip"><text>✅ 已免除</text></view>
+      <view v-if="isMathExcluded" class="excluded-tip"
+        ><text>✅ 已免除</text></view
+      >
       <view v-else-if="isMathCoupon" class="coupon-tip">
         <view class="coupon-tip-main">
           <text>🎟️ 媛媛免除</text>
           <text class="revoke-btn" @click="onRevokeClick('math')">撤销</text>
         </view>
-        <text v-if="mathCouponActionTime" class="status-time">使用于 {{ mathCouponActionTime }}</text>
+        <text v-if="mathCouponActionTime" class="status-time"
+          >使用于 {{ mathCouponActionTime }}</text
+        >
       </view>
-      
+
       <block v-else>
-        <u-input v-model="form.mathTitle" placeholder="练习题目内容" :disabled="!canEditMath || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
+        <u-input
+          v-model="form.mathTitle"
+          placeholder="练习题目内容"
+          :disabled="!canEditMath || isLockedMath"
+          :border="false"
+          customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"
+        ></u-input>
         <view class="time-row">
           <text class="label">时长：</text>
           <view class="time-input">
-            <u-input v-model="form.mathMin" type="number" placeholder="分" :disabled="!canEditMath || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+            <u-input
+              v-model="form.mathMin"
+              type="number"
+              placeholder="分"
+              :disabled="!canEditMath || isLockedMath"
+              :border="false"
+              customStyle="border-bottom: 1px solid #f0f0f0;"
+            ></u-input>
             <text>分</text>
           </view>
           <view class="time-input">
-            <u-input v-model="form.mathSec" type="number" placeholder="秒" :disabled="!canEditMath || isLockedMath" :border="false" customStyle="border-bottom: 1px solid #f0f0f0;"></u-input>
+            <u-input
+              v-model="form.mathSec"
+              type="number"
+              placeholder="秒"
+              :disabled="!canEditMath || isLockedMath"
+              :border="false"
+              customStyle="border-bottom: 1px solid #f0f0f0;"
+            ></u-input>
             <text>秒</text>
           </view>
         </view>
         <view v-if="canEditMath || canUseRemedyMath" class="card-action-wrap">
           <view class="card-action-row">
-          <view v-if="isLockedMath || needsRemedyMath" class="locked-action-block">
-            <u-button v-if="isEditable" text="编辑数学" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingMath = true"></u-button>
-            <u-button v-else-if="canUseRemedyMath" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('math')"></u-button>
-            <text v-if="mathStatusText" class="status-time">{{ mathStatusText }}</text>
+            <view
+              v-if="isLockedMath || needsRemedyMath"
+              class="locked-action-block"
+            >
+              <u-button
+                v-if="isEditable"
+                text="编辑数学"
+                color="#bbbbbb"
+                size="small"
+                customStyle="border-radius: 16rpx; width: 100%;"
+                @click="editingMath = true"
+              ></u-button>
+              <u-button
+                v-else-if="canUseRemedyMath"
+                text="使用补救券"
+                color="#5856D6"
+                plain
+                size="small"
+                customStyle="border-radius: 16rpx; width: 100%;"
+                @click="useRemedyCoupon('math')"
+              ></u-button>
+              <text v-if="mathStatusText" class="status-time">{{
+                mathStatusText
+              }}</text>
+            </view>
+            <block v-else>
+              <view class="action-btn-block">
+                <u-button
+                  text="保存数学"
+                  color="#FF9500"
+                  size="small"
+                  :loading="loadingMath"
+                  customStyle="border-radius: 40rpx; flex: 1;"
+                  @click="saveMath"
+                ></u-button>
+              </view>
+              <view
+                v-if="isEditable && currentExemptAvailable > 0"
+                class="action-btn-block action-btn-block--split"
+              >
+                <u-button
+                  text="使用免除券"
+                  color="#FF9500"
+                  plain
+                  size="small"
+                  customStyle="border-radius: 40rpx; flex: 1;"
+                  @click="useCoupon('math')"
+                ></u-button>
+              </view>
+            </block>
           </view>
-          <block v-else>
-            <view class="action-btn-block">
-              <u-button text="保存数学" color="#FF9500" size="small" :loading="loadingMath" customStyle="border-radius: 40rpx; flex: 1;" @click="saveMath"></u-button>
-            </view>
-            <view v-if="isEditable && remainingCoupons > 0" class="action-btn-block action-btn-block--split">
-              <u-button text="使用免除券" color="#FF9500" plain size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="useCoupon('math')"></u-button>
-            </view>
-          </block>
-        </view>
         </view>
       </block>
-      <view v-if="!canInteractMath && !isMathExcluded && !isMathCoupon" class="block-mask" @click="onBlockedTap"></view>
+      <view
+        v-if="!canInteractMath && !isMathExcluded && !isMathCoupon"
+        class="block-mask"
+        @click="onBlockedTap"
+      ></view>
     </view>
 
-    <view class="card" :class="{ 'card--locked': isLockedClass && !isClassExcluded }">
+    <view
+      class="card"
+      :class="{ 'card--locked': isLockedClass && !isClassExcluded }"
+    >
       <view class="card-title"><text class="card-icon">💻</text> 英语网课</view>
 
-      <view v-if="isClassExcluded" class="excluded-tip"><text>✅ 已免除</text></view>
+      <view v-if="isClassExcluded" class="excluded-tip"
+        ><text>✅ 已免除</text></view
+      >
       <view v-else-if="isClassCoupon" class="coupon-tip">
         <view class="coupon-tip-main">
           <text>🎟️ 媛媛免除</text>
           <text class="revoke-btn" @click="onRevokeClick('class')">撤销</text>
         </view>
-        <text v-if="classCouponActionTime" class="status-time">使用于 {{ classCouponActionTime }}</text>
+        <text v-if="classCouponActionTime" class="status-time"
+          >使用于 {{ classCouponActionTime }}</text
+        >
       </view>
 
       <block v-else>
-        <u-input v-model="form.classTitle" placeholder="课程标题" :disabled="!canEditClass || isLockedClass" :border="false" customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"></u-input>
-        <view class="radio-row" :class="{ 'radio-row--locked': isLockedClass, 'radio-row--readonly': !canEditClass }">
+        <u-input
+          v-model="form.classTitle"
+          placeholder="课程标题"
+          :disabled="!canEditClass || isLockedClass"
+          :border="false"
+          customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"
+        ></u-input>
+        <view
+          class="radio-row"
+          :class="{
+            'radio-row--locked': isLockedClass,
+            'radio-row--readonly': !canEditClass,
+          }"
+        >
           <u-radio-group v-model="form.classType" placement="row">
-            <u-radio label="上" name="上" :activeColor="isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
-            <u-radio label="下" name="下" :activeColor="isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'" customStyle="margin-right: 40rpx;"></u-radio>
-            <u-radio label="全部" name="全部" :activeColor="isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'"></u-radio>
+            <u-radio
+              label="上"
+              name="上"
+              :activeColor="
+                isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'
+              "
+              customStyle="margin-right: 40rpx;"
+            ></u-radio>
+            <u-radio
+              label="下"
+              name="下"
+              :activeColor="
+                isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'
+              "
+              customStyle="margin-right: 40rpx;"
+            ></u-radio>
+            <u-radio
+              label="全部"
+              name="全部"
+              :activeColor="
+                isLockedClass || !canEditClass ? '#bbbbbb' : '#34C759'
+              "
+            ></u-radio>
           </u-radio-group>
         </view>
         <view v-if="canEditClass || canUseRemedyClass" class="card-action-wrap">
           <view class="card-action-row">
-          <view v-if="isLockedClass || needsRemedyClass" class="locked-action-block">
-            <u-button v-if="isEditable" text="编辑网课" color="#bbbbbb" size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="editingClass = true"></u-button>
-            <u-button v-else-if="canUseRemedyClass" text="使用补救券" color="#5856D6" plain size="small" customStyle="border-radius: 16rpx; width: 100%;" @click="useRemedyCoupon('class')"></u-button>
-            <text v-if="classStatusText" class="status-time">{{ classStatusText }}</text>
+            <view
+              v-if="isLockedClass || needsRemedyClass"
+              class="locked-action-block"
+            >
+              <u-button
+                v-if="isEditable"
+                text="编辑网课"
+                color="#bbbbbb"
+                size="small"
+                customStyle="border-radius: 16rpx; width: 100%;"
+                @click="editingClass = true"
+              ></u-button>
+              <u-button
+                v-else-if="canUseRemedyClass"
+                text="使用补救券"
+                color="#5856D6"
+                plain
+                size="small"
+                customStyle="border-radius: 16rpx; width: 100%;"
+                @click="useRemedyCoupon('class')"
+              ></u-button>
+              <text v-if="classStatusText" class="status-time">{{
+                classStatusText
+              }}</text>
+            </view>
+            <block v-else>
+              <view class="action-btn-block">
+                <u-button
+                  text="保存网课"
+                  color="#34C759"
+                  size="small"
+                  :loading="loadingClass"
+                  customStyle="border-radius: 40rpx; flex: 1;"
+                  @click="saveClass"
+                ></u-button>
+              </view>
+              <view
+                v-if="isEditable && currentExemptAvailable > 0"
+                class="action-btn-block action-btn-block--split"
+              >
+                <u-button
+                  text="使用免除券"
+                  color="#FF9500"
+                  plain
+                  size="small"
+                  customStyle="border-radius: 40rpx; flex: 1;"
+                  @click="useCoupon('class')"
+                ></u-button>
+              </view>
+            </block>
           </view>
-          <block v-else>
-            <view class="action-btn-block">
-              <u-button text="保存网课" color="#34C759" size="small" :loading="loadingClass" customStyle="border-radius: 40rpx; flex: 1;" @click="saveClass"></u-button>
-            </view>
-            <view v-if="isEditable && remainingCoupons > 0" class="action-btn-block action-btn-block--split">
-              <u-button text="使用免除券" color="#FF9500" plain size="small" customStyle="border-radius: 40rpx; flex: 1;" @click="useCoupon('class')"></u-button>
-            </view>
-          </block>
-        </view>
         </view>
       </block>
-      <view v-if="!canInteractClass && !isClassExcluded && !isClassCoupon" class="block-mask" @click="onBlockedTap"></view>
+      <view
+        v-if="!canInteractClass && !isClassExcluded && !isClassCoupon"
+        class="block-mask"
+        @click="onBlockedTap"
+      ></view>
     </view>
 
     <view v-if="isEditable && hasRecord" class="delete-row">
@@ -167,7 +412,12 @@
       <view v-if="showPwdDialog" class="overlay" @click="closePwdDialog">
         <view class="pwd-box" @click.stop>
           <view class="pwd-title">安全验证</view>
-          <input class="pwd-input" type="password" placeholder="请输入密码" v-model="pwdInput" />
+          <input
+            class="pwd-input"
+            type="password"
+            placeholder="请输入密码"
+            v-model="pwdInput"
+          />
           <view class="btn-row">
             <view class="btn-cancel" @click="closePwdDialog">取消</view>
             <view class="btn-save" @click="verifyPwd">确认</view>
@@ -177,12 +427,37 @@
     </transition>
 
     <transition name="modal-anim">
-      <view v-if="showAddCouponDialog" class="overlay" @click="showAddCouponDialog = false">
+      <view
+        v-if="showAddCouponDialog"
+        class="overlay"
+        @click="showAddCouponDialog = false"
+      >
         <view class="pwd-box" @click.stop>
           <view class="pwd-title">发放免除券</view>
-          <input class="pwd-input" type="number" placeholder="输入增加的张数" v-model="addCouponCount" />
+          <view class="range-select-label">绑定常用时间区间</view>
+          <view v-if="savedRanges.length === 0" class="range-empty-tip"
+            >请先在「区间记录」中添加常用时间段</view
+          >
+          <scroll-view v-else scroll-y class="range-select-list">
+            <view
+              v-for="(r, i) in savedRanges"
+              :key="i"
+              class="range-option"
+              :class="{ 'range-option-active': isSameRange(selectedRange, r) }"
+              @click="selectedRange = r"
+              >{{ r.startDate }} 至 {{ r.endDate }}</view
+            >
+          </scroll-view>
+          <input
+            class="pwd-input"
+            type="number"
+            placeholder="输入增加的张数"
+            v-model="addCouponCount"
+          />
           <view class="btn-row">
-            <view class="btn-cancel" @click="showAddCouponDialog = false">取消</view>
+            <view class="btn-cancel" @click="showAddCouponDialog = false"
+              >取消</view
+            >
             <view class="btn-save" @click="executeAddCoupon">确认发放</view>
           </view>
         </view>
@@ -190,13 +465,136 @@
     </transition>
 
     <transition name="modal-anim">
-      <view v-if="showAddRemedyCouponDialog" class="overlay" @click="showAddRemedyCouponDialog = false">
+      <view
+        v-if="showAddRemedyCouponDialog"
+        class="overlay"
+        @click="showAddRemedyCouponDialog = false"
+      >
         <view class="pwd-box" @click.stop>
           <view class="pwd-title">发放补救券</view>
-          <input class="pwd-input" type="number" placeholder="输入增加的张数" v-model="addRemedyCouponCount" />
+          <view class="range-select-label">绑定常用时间区间</view>
+          <view v-if="savedRanges.length === 0" class="range-empty-tip"
+            >请先在「区间记录」中添加常用时间段</view
+          >
+          <scroll-view v-else scroll-y class="range-select-list">
+            <view
+              v-for="(r, i) in savedRanges"
+              :key="i"
+              class="range-option"
+              :class="{ 'range-option-active': isSameRange(selectedRange, r) }"
+              @click="selectedRange = r"
+              >{{ r.startDate }} 至 {{ r.endDate }}</view
+            >
+          </scroll-view>
+          <input
+            class="pwd-input"
+            type="number"
+            placeholder="输入增加的张数"
+            v-model="addRemedyCouponCount"
+          />
           <view class="btn-row">
-            <view class="btn-cancel" @click="showAddRemedyCouponDialog = false">取消</view>
-            <view class="btn-save remedy-save" @click="executeAddRemedyCoupon">确认发放</view>
+            <view class="btn-cancel" @click="showAddRemedyCouponDialog = false"
+              >取消</view
+            >
+            <view class="btn-save remedy-save" @click="executeAddRemedyCoupon"
+              >确认发放</view
+            >
+          </view>
+        </view>
+      </view>
+    </transition>
+
+    <transition name="modal-anim">
+      <view
+        v-if="showReduceCouponDialog"
+        class="overlay"
+        @click="showReduceCouponDialog = false"
+      >
+        <view class="pwd-box" @click.stop>
+          <view class="pwd-title">删除免除券</view>
+          <view class="range-select-label"
+            >选择要删除的区间（仅可删未使用的）</view
+          >
+          <view
+            v-if="reducibleCouponBatches.length === 0"
+            class="range-empty-tip"
+            >没有可删除的免除券</view
+          >
+          <scroll-view v-else scroll-y class="range-select-list">
+            <view
+              v-for="(b, i) in reducibleCouponBatches"
+              :key="i"
+              class="range-option"
+              :class="{
+                'range-option-active': isSameRange(selectedReduceBatch, b),
+              }"
+              @click="selectedReduceBatch = b"
+              >{{ b.startDate }} 至 {{ b.endDate }}（可删
+              {{ b.remaining }}）</view
+            >
+          </scroll-view>
+          <input
+            class="pwd-input"
+            type="number"
+            placeholder="输入删除的张数"
+            v-model="reduceCouponCount"
+          />
+          <view class="btn-row">
+            <view class="btn-cancel" @click="showReduceCouponDialog = false"
+              >取消</view
+            >
+            <view class="btn-save" @click="executeReduceCoupon">确认删除</view>
+          </view>
+        </view>
+      </view>
+    </transition>
+
+    <transition name="modal-anim">
+      <view
+        v-if="showReduceRemedyCouponDialog"
+        class="overlay"
+        @click="showReduceRemedyCouponDialog = false"
+      >
+        <view class="pwd-box" @click.stop>
+          <view class="pwd-title">删除补救券</view>
+          <view class="range-select-label"
+            >选择要删除的区间（仅可删未使用的）</view
+          >
+          <view
+            v-if="reducibleRemedyBatches.length === 0"
+            class="range-empty-tip"
+            >没有可删除的补救券</view
+          >
+          <scroll-view v-else scroll-y class="range-select-list">
+            <view
+              v-for="(b, i) in reducibleRemedyBatches"
+              :key="i"
+              class="range-option"
+              :class="{
+                'range-option-active': isSameRange(selectedReduceBatch, b),
+              }"
+              @click="selectedReduceBatch = b"
+              >{{ b.startDate }} 至 {{ b.endDate }}（可删
+              {{ b.remaining }}）</view
+            >
+          </scroll-view>
+          <input
+            class="pwd-input"
+            type="number"
+            placeholder="输入删除的张数"
+            v-model="reduceRemedyCouponCount"
+          />
+          <view class="btn-row">
+            <view
+              class="btn-cancel"
+              @click="showReduceRemedyCouponDialog = false"
+              >取消</view
+            >
+            <view
+              class="btn-save remedy-save"
+              @click="executeReduceRemedyCoupon"
+              >确认删除</view
+            >
           </view>
         </view>
       </view>
@@ -206,90 +604,172 @@
       <view v-if="showLogDialog" class="overlay" @click="showLogDialog = false">
         <view class="log-box" @click.stop>
           <view class="pwd-title">免除券明细</view>
-          <scroll-view scroll-y class="log-scroll" @scrolltolower="loadMoreLogs">
+          <scroll-view
+            scroll-y
+            class="log-scroll"
+            @scrolltolower="loadMoreLogs"
+          >
             <view class="log-item" v-for="item in logList" :key="item.id">
               <view class="log-info">
                 <view class="log-detail">{{ item.detail }}</view>
                 <view class="log-time">{{ item.time }}</view>
               </view>
-              <view class="log-amount" :class="item.amount > 0 ? 'positive' : 'negative'">
-                {{ item.amount > 0 ? '+' + item.amount : item.amount }}
+              <view
+                class="log-amount"
+                :class="item.amount > 0 ? 'positive' : 'negative'"
+              >
+                {{ item.amount > 0 ? "+" + item.amount : item.amount }}
               </view>
             </view>
-            
-            <view v-if="logList.length === 0 && !logLoading" class="empty-log">暂无记录</view>
-            <view v-else-if="!hasMoreLogs && logList.length > 0" class="no-more">到底啦</view>
+
+            <view v-if="logList.length === 0 && !logLoading" class="empty-log"
+              >暂无记录</view
+            >
+            <view v-else-if="!hasMoreLogs && logList.length > 0" class="no-more"
+              >到底啦</view
+            >
             <view v-else-if="logLoading" class="loading-more">加载中...</view>
           </scroll-view>
-          
-          <view class="btn-row" style="margin-top: 20rpx;">
-            <view class="btn-cancel" style="width: 100%" @click="showLogDialog = false">关闭</view>
+
+          <view class="btn-row" style="margin-top: 20rpx">
+            <view
+              class="btn-cancel"
+              style="width: 100%"
+              @click="showLogDialog = false"
+              >关闭</view
+            >
           </view>
         </view>
       </view>
     </transition>
 
     <transition name="modal-anim">
-      <view v-if="showRemedyLogDialog" class="overlay" @click="showRemedyLogDialog = false">
+      <view
+        v-if="showRemedyLogDialog"
+        class="overlay"
+        @click="showRemedyLogDialog = false"
+      >
         <view class="log-box" @click.stop>
           <view class="pwd-title">补救券明细</view>
-          <scroll-view scroll-y class="log-scroll" @scrolltolower="loadMoreRemedyLogs">
+          <scroll-view
+            scroll-y
+            class="log-scroll"
+            @scrolltolower="loadMoreRemedyLogs"
+          >
             <view class="log-item" v-for="item in remedyLogList" :key="item.id">
               <view class="log-info">
                 <view class="log-detail">{{ item.detail }}</view>
                 <view class="log-time">{{ item.time }}</view>
               </view>
-              <view class="log-amount remedy-amount" :class="item.amount > 0 ? 'positive' : 'negative'">
-                {{ item.amount > 0 ? '+' + item.amount : item.amount }}
+              <view
+                class="log-amount remedy-amount"
+                :class="item.amount > 0 ? 'positive' : 'negative'"
+              >
+                {{ item.amount > 0 ? "+" + item.amount : item.amount }}
               </view>
             </view>
-            
-            <view v-if="remedyLogList.length === 0 && !remedyLogLoading" class="empty-log">暂无记录</view>
-            <view v-else-if="!hasMoreRemedyLogs && remedyLogList.length > 0" class="no-more">到底啦</view>
-            <view v-else-if="remedyLogLoading" class="loading-more">加载中...</view>
+
+            <view
+              v-if="remedyLogList.length === 0 && !remedyLogLoading"
+              class="empty-log"
+              >暂无记录</view
+            >
+            <view
+              v-else-if="!hasMoreRemedyLogs && remedyLogList.length > 0"
+              class="no-more"
+              >到底啦</view
+            >
+            <view v-else-if="remedyLogLoading" class="loading-more"
+              >加载中...</view
+            >
           </scroll-view>
-          
-          <view class="btn-row" style="margin-top: 20rpx;">
-            <view class="btn-cancel" style="width: 100%" @click="showRemedyLogDialog = false">关闭</view>
+
+          <view class="btn-row" style="margin-top: 20rpx">
+            <view
+              class="btn-cancel"
+              style="width: 100%"
+              @click="showRemedyLogDialog = false"
+              >关闭</view
+            >
           </view>
         </view>
       </view>
     </transition>
-
   </view>
 </template>
 
 <script setup>
-import { reactive, ref, computed, watch, onUnmounted } from 'vue';
-import Global from '@/utils/Global.js';
+import { reactive, ref, computed, watch, onUnmounted } from "vue";
+import Global from "@/utils/Global.js";
 
 const props = defineProps({
-  selectedDate: { type: Date,   default: () => new Date() },
-  dayRecord:    { type: Object, default: null }
+  selectedDate: { type: Date, default: () => new Date() },
+  dayRecord: { type: Object, default: null },
 });
-const emit = defineEmits(['saved', 'deleted']);
+const emit = defineEmits(["saved", "deleted"]);
 
 const loadingReading = ref(false);
-const loadingMath    = ref(false);
-const loadingClass   = ref(false);
-const deleteLoading  = ref(false);
+const loadingMath = ref(false);
+const loadingClass = ref(false);
+const deleteLoading = ref(false);
 const showCompleteFeedback = ref(false);
 let completeFeedbackTimer = null;
 let completeAudio = null;
 
 const editingReading = ref(false);
-const editingMath    = ref(false);
-const editingClass   = ref(false);
+const editingMath = ref(false);
+const editingClass = ref(false);
 
 const form = reactive({
-  readingStart: '', readingEnd: '',
-  mathTitle: '', mathMin: '', mathSec: '',
-  classTitle: '', classType: ''
+  readingStart: "",
+  readingEnd: "",
+  mathTitle: "",
+  mathMin: "",
+  mathSec: "",
+  classTitle: "",
+  classType: "",
 });
 
 const exclusionsList = ref([]);
 const remainingCoupons = ref(0);
 const remainingRemedyCoupons = ref(0);
+
+// === 券与常用时间区间绑定 ===
+const couponBatches = ref([]); // 免除券各区间余额 [{startDate,endDate,total,used,remaining}]
+const remedyCouponBatches = ref([]); // 补救券各区间余额
+const savedRanges = ref([]); // 常用时间段（发放时选择绑定）
+const selectedRange = ref(null); // 发放弹窗中选中的区间
+const selectedReduceBatch = ref(null); // 删除弹窗中选中的批次
+
+// 仅列出还有未使用张数的批次（只能删未使用的）
+const reducibleCouponBatches = computed(() =>
+  (couponBatches.value || []).filter((b) => (b.remaining ?? 0) > 0)
+);
+const reducibleRemedyBatches = computed(() =>
+  (remedyCouponBatches.value || []).filter((b) => (b.remaining ?? 0) > 0)
+);
+
+const isSameRange = (a, b) =>
+  !!a && !!b && a.startDate === b.startDate && a.endDate === b.endDate;
+
+// 汇总「区间覆盖某日期」的剩余张数
+const sumCovering = (batches, d) =>
+  (batches || []).reduce(
+    (acc, b) =>
+      d && b.startDate <= d && d <= b.endDate ? acc + (b.remaining ?? 0) : acc,
+    0
+  );
+
+const currentDateStr = computed(() =>
+  props.selectedDate ? formatDate(props.selectedDate) : ""
+);
+// 当前选中日期所在区间的可用张数（决定使用按钮是否出现）
+const currentExemptAvailable = computed(() =>
+  sumCovering(couponBatches.value, currentDateStr.value)
+);
+const currentRemedyAvailable = computed(() =>
+  sumCovering(remedyCouponBatches.value, currentDateStr.value)
+);
 const readingActionTime = ref("");
 const mathActionTime = ref("");
 const classActionTime = ref("");
@@ -310,6 +790,10 @@ const showAddCouponDialog = ref(false);
 const addCouponCount = ref("");
 const showAddRemedyCouponDialog = ref(false);
 const addRemedyCouponCount = ref("");
+const showReduceCouponDialog = ref(false);
+const reduceCouponCount = ref("");
+const showReduceRemedyCouponDialog = ref(false);
+const reduceRemedyCouponCount = ref("");
 
 // === 新增：日志弹窗数据状态 ===
 const showLogDialog = ref(false);
@@ -325,7 +809,7 @@ const hasMoreRemedyLogs = ref(true);
 // =============================
 
 const requirePassword = (callback) => {
-  pwdInput.value = ""; 
+  pwdInput.value = "";
   pwdSuccessCallback = callback;
   showPwdDialog.value = true;
 };
@@ -350,6 +834,8 @@ const verifyPwd = () => {
 const onAddCouponClick = () => {
   requirePassword(() => {
     addCouponCount.value = "";
+    selectedRange.value = null;
+    loadSavedRanges();
     showAddCouponDialog.value = true;
   });
 };
@@ -357,18 +843,28 @@ const onAddCouponClick = () => {
 const onAddRemedyCouponClick = () => {
   requirePassword(() => {
     addRemedyCouponCount.value = "";
+    selectedRange.value = null;
+    loadSavedRanges();
     showAddRemedyCouponDialog.value = true;
   });
 };
 
 const executeAddCoupon = () => {
   const count = parseInt(addCouponCount.value);
-  if (!count || count <= 0) return uni.showToast({ title: '请输入正确张数', icon: 'none' });
-  
+  if (!count || count <= 0)
+    return uni.showToast({ title: "请输入正确张数", icon: "none" });
+  if (!selectedRange.value)
+    return uni.showToast({ title: "请选择要绑定的常用时间区间", icon: "none" });
+
   uni.request({
     url: `${Global.BASE_URL}/`,
     method: "POST",
-    data: { method: "addCoupon", count: count },
+    data: {
+      method: "addCoupon",
+      count: count,
+      startDate: selectedRange.value.startDate,
+      endDate: selectedRange.value.endDate,
+    },
     header: { "content-type": "application/x-www-form-urlencoded" },
     success: (res) => {
       if (res.data?.code === 0) {
@@ -376,21 +872,29 @@ const executeAddCoupon = () => {
         uni.showToast({ title: "发放成功", icon: "success" });
         loadCoupons();
       } else {
-        uni.showToast({ title: res.data?.msg || "发放失败", icon: "none" }); 
+        uni.showToast({ title: res.data?.msg || "发放失败", icon: "none" });
       }
     },
-    fail: () => uni.showToast({ title: "网络异常", icon: "none" })
+    fail: () => uni.showToast({ title: "网络异常", icon: "none" }),
   });
 };
 
 const executeAddRemedyCoupon = () => {
   const count = parseInt(addRemedyCouponCount.value);
-  if (!count || count <= 0) return uni.showToast({ title: '请输入正确张数', icon: 'none' });
-  
+  if (!count || count <= 0)
+    return uni.showToast({ title: "请输入正确张数", icon: "none" });
+  if (!selectedRange.value)
+    return uni.showToast({ title: "请选择要绑定的常用时间区间", icon: "none" });
+
   uni.request({
     url: `${Global.BASE_URL}/`,
     method: "POST",
-    data: { method: "addRemedyCoupon", count: count },
+    data: {
+      method: "addRemedyCoupon",
+      count: count,
+      startDate: selectedRange.value.startDate,
+      endDate: selectedRange.value.endDate,
+    },
     header: { "content-type": "application/x-www-form-urlencoded" },
     success: (res) => {
       if (res.data?.code === 0) {
@@ -398,10 +902,98 @@ const executeAddRemedyCoupon = () => {
         uni.showToast({ title: "发放成功", icon: "success" });
         loadRemedyCoupons();
       } else {
-        uni.showToast({ title: res.data?.msg || "发放失败", icon: "none" }); 
+        uni.showToast({ title: res.data?.msg || "发放失败", icon: "none" });
       }
     },
-    fail: () => uni.showToast({ title: "网络异常", icon: "none" })
+    fail: () => uni.showToast({ title: "网络异常", icon: "none" }),
+  });
+};
+
+const onReduceCouponClick = () => {
+  requirePassword(() => {
+    reduceCouponCount.value = "";
+    selectedReduceBatch.value = null;
+    loadCoupons();
+    showReduceCouponDialog.value = true;
+  });
+};
+
+const onReduceRemedyCouponClick = () => {
+  requirePassword(() => {
+    reduceRemedyCouponCount.value = "";
+    selectedReduceBatch.value = null;
+    loadRemedyCoupons();
+    showReduceRemedyCouponDialog.value = true;
+  });
+};
+
+const executeReduceCoupon = () => {
+  const count = parseInt(reduceCouponCount.value);
+  if (!count || count <= 0)
+    return uni.showToast({ title: "请输入正确张数", icon: "none" });
+  if (!selectedReduceBatch.value)
+    return uni.showToast({ title: "请选择要删除的区间", icon: "none" });
+  if (count > (selectedReduceBatch.value.remaining ?? 0))
+    return uni.showToast({
+      title: `最多只能删除未使用的 ${selectedReduceBatch.value.remaining} 张`,
+      icon: "none",
+    });
+
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "reduceCoupon",
+      count: count,
+      startDate: selectedReduceBatch.value.startDate,
+      endDate: selectedReduceBatch.value.endDate,
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        showReduceCouponDialog.value = false;
+        uni.showToast({ title: "删除成功", icon: "success" });
+        loadCoupons();
+      } else {
+        uni.showToast({ title: res.data?.msg || "删除失败", icon: "none" });
+      }
+    },
+    fail: () => uni.showToast({ title: "网络异常", icon: "none" }),
+  });
+};
+
+const executeReduceRemedyCoupon = () => {
+  const count = parseInt(reduceRemedyCouponCount.value);
+  if (!count || count <= 0)
+    return uni.showToast({ title: "请输入正确张数", icon: "none" });
+  if (!selectedReduceBatch.value)
+    return uni.showToast({ title: "请选择要删除的区间", icon: "none" });
+  if (count > (selectedReduceBatch.value.remaining ?? 0))
+    return uni.showToast({
+      title: `最多只能删除未使用的 ${selectedReduceBatch.value.remaining} 张`,
+      icon: "none",
+    });
+
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "reduceRemedyCoupon",
+      count: count,
+      startDate: selectedReduceBatch.value.startDate,
+      endDate: selectedReduceBatch.value.endDate,
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        showReduceRemedyCouponDialog.value = false;
+        uni.showToast({ title: "删除成功", icon: "success" });
+        loadRemedyCoupons();
+      } else {
+        uni.showToast({ title: res.data?.msg || "删除失败", icon: "none" });
+      }
+    },
+    fail: () => uni.showToast({ title: "网络异常", icon: "none" }),
   });
 };
 
@@ -414,6 +1006,7 @@ const loadCoupons = () => {
     success: (res) => {
       if (res.data?.code === 0) {
         remainingCoupons.value = res.data.remaining;
+        couponBatches.value = res.data.batches || [];
       }
     },
   });
@@ -428,6 +1021,23 @@ const loadRemedyCoupons = () => {
     success: (res) => {
       if (res.data?.code === 0) {
         remainingRemedyCoupons.value = res.data.remaining;
+        remedyCouponBatches.value = res.data.batches || [];
+      }
+    },
+  });
+};
+
+const loadSavedRanges = () => {
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: { method: "getSavedDateRange" },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        savedRanges.value = Array.isArray(res.data.ranges)
+          ? res.data.ranges
+          : [];
       }
     },
   });
@@ -442,7 +1052,7 @@ const formatActionTime = (val) => {
 const fetchLogs = (isRefresh = false) => {
   if (logLoading.value || !hasMoreLogs.value) return;
   logLoading.value = true;
-  
+
   uni.request({
     url: `${Global.BASE_URL}/`,
     method: "POST",
@@ -460,7 +1070,9 @@ const fetchLogs = (isRefresh = false) => {
         hasMoreLogs.value = newData.length === 15;
       }
     },
-    complete: () => { logLoading.value = false; }
+    complete: () => {
+      logLoading.value = false;
+    },
   });
 };
 
@@ -481,11 +1093,15 @@ const loadMoreLogs = () => {
 const fetchRemedyLogs = (isRefresh = false) => {
   if (remedyLogLoading.value || !hasMoreRemedyLogs.value) return;
   remedyLogLoading.value = true;
-  
+
   uni.request({
     url: `${Global.BASE_URL}/`,
     method: "POST",
-    data: { method: "getRemedyCouponLogs", page: remedyLogPage.value, size: 15 },
+    data: {
+      method: "getRemedyCouponLogs",
+      page: remedyLogPage.value,
+      size: 15,
+    },
     header: { "content-type": "application/x-www-form-urlencoded" },
     success: (res) => {
       if (res.data?.code === 0) {
@@ -498,7 +1114,9 @@ const fetchRemedyLogs = (isRefresh = false) => {
         hasMoreRemedyLogs.value = newData.length === 15;
       }
     },
-    complete: () => { remedyLogLoading.value = false; }
+    complete: () => {
+      remedyLogLoading.value = false;
+    },
   });
 };
 
@@ -531,113 +1149,200 @@ const loadExclusions = () => {
   });
 };
 
-const isReadingExcluded = computed(() => exclusionsList.value.includes(`${formatDate(props.selectedDate)}:reading`));
-const isMathExcluded = computed(() => exclusionsList.value.includes(`${formatDate(props.selectedDate)}:math`));
-const isClassExcluded = computed(() => exclusionsList.value.includes(`${formatDate(props.selectedDate)}:class`));
+const isReadingExcluded = computed(() =>
+  exclusionsList.value.includes(`${formatDate(props.selectedDate)}:reading`)
+);
+const isMathExcluded = computed(() =>
+  exclusionsList.value.includes(`${formatDate(props.selectedDate)}:math`)
+);
+const isClassExcluded = computed(() =>
+  exclusionsList.value.includes(`${formatDate(props.selectedDate)}:class`)
+);
 
 // 媛媛免除判断
-const isReadingCoupon = computed(() => String(props.dayRecord?.reading_start) === '-1');
-const isMathCoupon    = computed(() => props.dayRecord?.math_title === '媛媛免除');
-const isClassCoupon   = computed(() => props.dayRecord?.class_title === '媛媛免除');
+const isReadingCoupon = computed(
+  () => String(props.dayRecord?.reading_start) === "-1"
+);
+const isMathCoupon = computed(() => props.dayRecord?.math_title === "媛媛免除");
+const isClassCoupon = computed(
+  () => props.dayRecord?.class_title === "媛媛免除"
+);
 
 const isEditable = computed(() => {
   if (!props.selectedDate) return false;
-  const sel       = new Date(props.selectedDate); sel.setHours(0,0,0,0);
-  const today     = new Date(); today.setHours(0,0,0,0);
-  const dayBeforeYesterday = new Date(today); dayBeforeYesterday.setDate(today.getDate() - 2);
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const tomorrow  = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  return sel.getTime() === dayBeforeYesterday.getTime()
-      || sel.getTime() === yesterday.getTime()
-      || sel.getTime() === today.getTime()
-      || sel.getTime() === tomorrow.getTime();
+  const sel = new Date(props.selectedDate);
+  sel.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayBeforeYesterday = new Date(today);
+  dayBeforeYesterday.setDate(today.getDate() - 2);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  return (
+    sel.getTime() === dayBeforeYesterday.getTime() ||
+    sel.getTime() === yesterday.getTime() ||
+    sel.getTime() === today.getTime() ||
+    sel.getTime() === tomorrow.getTime()
+  );
 });
 
 const isFutureDate = computed(() => {
   if (!props.selectedDate) return false;
-  const sel       = new Date(props.selectedDate); sel.setHours(0,0,0,0);
-  const today     = new Date(); today.setHours(0,0,0,0);
+  const sel = new Date(props.selectedDate);
+  sel.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   return sel.getTime() > today.getTime();
 });
 
 const formattedDate = computed(() => {
   const d = props.selectedDate;
-  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 });
 
 const hasRecord = computed(() => !!props.dayRecord);
-const hasReading = computed(() => !!(props.dayRecord?.reading_start));
-const hasMath    = computed(() => !!(props.dayRecord?.math_title));
-const hasClass   = computed(() => !!(props.dayRecord?.class_title));
+const hasReading = computed(() => !!props.dayRecord?.reading_start);
+const hasMath = computed(() => !!props.dayRecord?.math_title);
+const hasClass = computed(() => !!props.dayRecord?.class_title);
 
-const isLockedReading = computed(() => hasReading.value && !editingReading.value);
-const isLockedMath    = computed(() => hasMath.value    && !editingMath.value);
-const isLockedClass   = computed(() => hasClass.value   && !editingClass.value);
-const hasRemedyCoupon = computed(() => remainingRemedyCoupons.value > 0);
-const canUseRemedyReading = computed(() => !isEditable.value && !isFutureDate.value && hasRemedyCoupon.value && !isReadingCoupon.value && !isReadingExcluded.value);
-const canUseRemedyMath = computed(() => !isEditable.value && !isFutureDate.value && hasRemedyCoupon.value && !isMathCoupon.value && !isMathExcluded.value);
-const canUseRemedyClass = computed(() => !isEditable.value && !isFutureDate.value && hasRemedyCoupon.value && !isClassCoupon.value && !isClassExcluded.value);
+const isLockedReading = computed(
+  () => hasReading.value && !editingReading.value
+);
+const isLockedMath = computed(() => hasMath.value && !editingMath.value);
+const isLockedClass = computed(() => hasClass.value && !editingClass.value);
+const hasRemedyCoupon = computed(() => currentRemedyAvailable.value > 0);
+const canUseRemedyReading = computed(
+  () =>
+    !isEditable.value &&
+    !isFutureDate.value &&
+    hasRemedyCoupon.value &&
+    !isReadingCoupon.value &&
+    !isReadingExcluded.value
+);
+const canUseRemedyMath = computed(
+  () =>
+    !isEditable.value &&
+    !isFutureDate.value &&
+    hasRemedyCoupon.value &&
+    !isMathCoupon.value &&
+    !isMathExcluded.value
+);
+const canUseRemedyClass = computed(
+  () =>
+    !isEditable.value &&
+    !isFutureDate.value &&
+    hasRemedyCoupon.value &&
+    !isClassCoupon.value &&
+    !isClassExcluded.value
+);
 const canEditReading = computed(() => isEditable.value || editingReading.value);
 const canEditMath = computed(() => isEditable.value || editingMath.value);
 const canEditClass = computed(() => isEditable.value || editingClass.value);
-const needsRemedyReading = computed(() => !canEditReading.value && canUseRemedyReading.value);
-const needsRemedyMath = computed(() => !canEditMath.value && canUseRemedyMath.value);
-const needsRemedyClass = computed(() => !canEditClass.value && canUseRemedyClass.value);
-const canInteractReading = computed(() => isEditable.value || editingReading.value || canUseRemedyReading.value);
-const canInteractMath = computed(() => isEditable.value || editingMath.value || canUseRemedyMath.value);
-const canInteractClass = computed(() => isEditable.value || editingClass.value || canUseRemedyClass.value);
-const readingStatusText = computed(() => readingRemedyUsedAt.value ? `补救日期：${readingRemedyUsedAt.value}` : (readingActionTime.value ? `保存于 ${readingActionTime.value}` : ''));
-const mathStatusText = computed(() => mathRemedyUsedAt.value ? `补救日期：${mathRemedyUsedAt.value}` : (mathActionTime.value ? `保存于 ${mathActionTime.value}` : ''));
-const classStatusText = computed(() => classRemedyUsedAt.value ? `补救日期：${classRemedyUsedAt.value}` : (classActionTime.value ? `保存于 ${classActionTime.value}` : ''));
+const needsRemedyReading = computed(
+  () => !canEditReading.value && canUseRemedyReading.value
+);
+const needsRemedyMath = computed(
+  () => !canEditMath.value && canUseRemedyMath.value
+);
+const needsRemedyClass = computed(
+  () => !canEditClass.value && canUseRemedyClass.value
+);
+const canInteractReading = computed(
+  () => isEditable.value || editingReading.value || canUseRemedyReading.value
+);
+const canInteractMath = computed(
+  () => isEditable.value || editingMath.value || canUseRemedyMath.value
+);
+const canInteractClass = computed(
+  () => isEditable.value || editingClass.value || canUseRemedyClass.value
+);
+const readingStatusText = computed(() =>
+  readingRemedyUsedAt.value
+    ? `补救日期：${readingRemedyUsedAt.value}`
+    : readingActionTime.value
+    ? `保存于 ${readingActionTime.value}`
+    : ""
+);
+const mathStatusText = computed(() =>
+  mathRemedyUsedAt.value
+    ? `补救日期：${mathRemedyUsedAt.value}`
+    : mathActionTime.value
+    ? `保存于 ${mathActionTime.value}`
+    : ""
+);
+const classStatusText = computed(() =>
+  classRemedyUsedAt.value
+    ? `补救日期：${classRemedyUsedAt.value}`
+    : classActionTime.value
+    ? `保存于 ${classActionTime.value}`
+    : ""
+);
 
 const formatTimeValue = (val) => {
-  if (val === undefined || val === null) return '';
+  if (val === undefined || val === null) return "";
   const str = String(val);
-  if (str === '0') return '';
+  if (str === "0") return "";
   return str;
 };
 
 const populate = (record) => {
-  form.readingStart = String(record?.reading_start ?? '');
-  form.readingEnd   = String(record?.reading_end   ?? '');
-  form.mathTitle    = record?.math_title  ?? '';
+  form.readingStart = String(record?.reading_start ?? "");
+  form.readingEnd = String(record?.reading_end ?? "");
+  form.mathTitle = record?.math_title ?? "";
   form.mathMin = formatTimeValue(record?.math_min);
   form.mathSec = formatTimeValue(record?.math_sec);
-  form.classTitle   = record?.class_title ?? '';
-  form.classType    = record?.class_type  ?? '';
-  if (record?.reading_saved_at !== undefined) readingActionTime.value = formatActionTime(record.reading_saved_at);
-  if (record?.math_saved_at !== undefined) mathActionTime.value = formatActionTime(record.math_saved_at);
-  if (record?.class_saved_at !== undefined) classActionTime.value = formatActionTime(record.class_saved_at);
-  if (record?.reading_coupon_used_at !== undefined) readingCouponActionTime.value = formatActionTime(record.reading_coupon_used_at);
-  if (record?.math_coupon_used_at !== undefined) mathCouponActionTime.value = formatActionTime(record.math_coupon_used_at);
-  if (record?.class_coupon_used_at !== undefined) classCouponActionTime.value = formatActionTime(record.class_coupon_used_at);
-  
+  form.classTitle = record?.class_title ?? "";
+  form.classType = record?.class_type ?? "";
+  if (record?.reading_saved_at !== undefined)
+    readingActionTime.value = formatActionTime(record.reading_saved_at);
+  if (record?.math_saved_at !== undefined)
+    mathActionTime.value = formatActionTime(record.math_saved_at);
+  if (record?.class_saved_at !== undefined)
+    classActionTime.value = formatActionTime(record.class_saved_at);
+  if (record?.reading_coupon_used_at !== undefined)
+    readingCouponActionTime.value = formatActionTime(
+      record.reading_coupon_used_at
+    );
+  if (record?.math_coupon_used_at !== undefined)
+    mathCouponActionTime.value = formatActionTime(record.math_coupon_used_at);
+  if (record?.class_coupon_used_at !== undefined)
+    classCouponActionTime.value = formatActionTime(record.class_coupon_used_at);
+
   // 处理补救信息
-  readingRemedyUsedAt.value = formatActionTime(record?.remedy?.reading?.saved_at || record?.remedy?.reading?.used_at || '');
-  mathRemedyUsedAt.value = formatActionTime(record?.remedy?.math?.saved_at || record?.remedy?.math?.used_at || '');
-  classRemedyUsedAt.value = formatActionTime(record?.remedy?.class?.saved_at || record?.remedy?.class?.used_at || '');
-  
+  readingRemedyUsedAt.value = formatActionTime(
+    record?.remedy?.reading?.saved_at || record?.remedy?.reading?.used_at || ""
+  );
+  mathRemedyUsedAt.value = formatActionTime(
+    record?.remedy?.math?.saved_at || record?.remedy?.math?.used_at || ""
+  );
+  classRemedyUsedAt.value = formatActionTime(
+    record?.remedy?.class?.saved_at || record?.remedy?.class?.used_at || ""
+  );
+
   editingReading.value = false;
-  editingMath.value    = false;
-  editingClass.value   = false;
+  editingMath.value = false;
+  editingClass.value = false;
 };
 
 watch(
   [() => props.selectedDate, () => props.dayRecord],
-  ([, record]) => { 
-    populate(record); 
-    loadExclusions(); 
+  ([, record]) => {
+    populate(record);
+    loadExclusions();
     loadCoupons();
     loadRemedyCoupons();
   },
   { immediate: true }
 );
 
-const showError  = (msg) => uni.showToast({ title: msg, icon: 'none', duration: 2000 });
+const showError = (msg) =>
+  uni.showToast({ title: msg, icon: "none", duration: 2000 });
 const getCompleteAudio = () => {
   if (completeAudio) return completeAudio;
   completeAudio = uni.createInnerAudioContext();
-  completeAudio.src = '/static/success.mp3';
+  completeAudio.src = "/static/success.mp3";
   return completeAudio;
 };
 
@@ -663,100 +1368,124 @@ const showSaveComplete = () => {
 
 const formatDate = (date) => {
   const y = date.getFullYear();
-  const m = String(date.getMonth()+1).padStart(2,'0');
-  const d = String(date.getDate()).padStart(2,'0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 };
 
 const onBlockedTap = () => {
-  uni.showToast({ title: '未到日期录入', icon: 'none', duration: 2000 });
+  uni.showToast({ title: "未到日期录入", icon: "none", duration: 2000 });
 };
 
 const validateReading = () => {
-  if (!form.readingStart || !form.readingEnd) return showError('请填写英语阅读页码'), false;
-  if (!/^\d+$/.test(form.readingStart) || !/^\d+$/.test(form.readingEnd)) return showError('页码必须是数字'), false;
-  if (Number(form.readingEnd) <= Number(form.readingStart)) return showError('结束页码必须大于开始页码'), false;
+  if (!form.readingStart || !form.readingEnd)
+    return showError("请填写英语阅读页码"), false;
+  if (!/^\d+$/.test(form.readingStart) || !/^\d+$/.test(form.readingEnd))
+    return showError("页码必须是数字"), false;
+  if (Number(form.readingEnd) <= Number(form.readingStart))
+    return showError("结束页码必须大于开始页码"), false;
   return true;
 };
 
 const validateMath = () => {
-  if (!form.mathTitle.trim()) return showError('请填写数学练习题目'), false;
-  if (form.mathMin === '' || form.mathSec === '') return showError('请填写数学练习时长'), false;
-  if (!/^\d+$/.test(form.mathMin) || !/^\d+$/.test(form.mathSec)) return showError('时长必须是数字'), false;
+  if (!form.mathTitle.trim()) return showError("请填写数学练习题目"), false;
+  if (form.mathMin === "" || form.mathSec === "")
+    return showError("请填写数学练习时长"), false;
+  if (!/^\d+$/.test(form.mathMin) || !/^\d+$/.test(form.mathSec))
+    return showError("时长必须是数字"), false;
   return true;
 };
 
 const validateClass = () => {
-  if (!form.classTitle.trim()) return showError('请填写网课课程标题'), false;
-  if (!form.classType) return showError('请选择网课类型'), false;
+  if (!form.classTitle.trim()) return showError("请填写网课课程标题"), false;
+  if (!form.classType) return showError("请选择网课类型"), false;
   return true;
 };
 
 const responseOk = (res) => {
   if (res.data?.code === 0) return true;
-  showError(res.data?.msg || '操作失败');
+  showError(res.data?.msg || "操作失败");
   return false;
 };
 
 const sectionLabel = (sectionName) => {
-  if (sectionName === 'reading') return '阅读';
-  if (sectionName === 'math') return '数学';
-  if (sectionName === 'class') return '网课';
-  return '该项';
+  if (sectionName === "reading") return "阅读";
+  if (sectionName === "math") return "数学";
+  if (sectionName === "class") return "网课";
+  return "该项";
 };
 
 // 使用免除券
 const useCoupon = (sectionName) => {
   uni.showModal({
-    title: '确认使用',
-    content: '要消耗 1 张免除券来抵消此项任务吗？',
-    confirmColor: '#FF9500',
+    title: "确认使用",
+    content: "要消耗 1 张免除券来抵消此项任务吗？",
+    confirmColor: "#FF9500",
     success: (res) => {
       if (res.confirm) {
         uni.request({
           url: `${Global.BASE_URL}/`,
-          method: 'POST',
-          data: { method: 'useCoupon', section: sectionName, date: formatDate(props.selectedDate) },
-          header: { 'content-type': 'application/x-www-form-urlencoded' },
+          method: "POST",
+          data: {
+            method: "useCoupon",
+            section: sectionName,
+            date: formatDate(props.selectedDate),
+          },
+          header: { "content-type": "application/x-www-form-urlencoded" },
           success: (resp) => {
             if (responseOk(resp)) {
-              if (sectionName === 'reading') readingCouponActionTime.value = formatActionTime(resp.data?.actionTime);
-              if (sectionName === 'math') mathCouponActionTime.value = formatActionTime(resp.data?.actionTime);
-              if (sectionName === 'class') classCouponActionTime.value = formatActionTime(resp.data?.actionTime);
+              if (sectionName === "reading")
+                readingCouponActionTime.value = formatActionTime(
+                  resp.data?.actionTime
+                );
+              if (sectionName === "math")
+                mathCouponActionTime.value = formatActionTime(
+                  resp.data?.actionTime
+                );
+              if (sectionName === "class")
+                classCouponActionTime.value = formatActionTime(
+                  resp.data?.actionTime
+                );
               showSaveComplete();
-              emit('saved', formatDate(props.selectedDate));
+              emit("saved", formatDate(props.selectedDate));
               loadCoupons();
             }
-          }
+          },
         });
       }
-    }
+    },
   });
 };
 
 const useRemedyCoupon = (sectionName) => {
   uni.showModal({
-    title: '确认补救',
-    content: `要消耗 1 张补救券来编辑 ${formattedDate.value} 的${sectionLabel(sectionName)}吗？一张补救券只能补救这一项。`,
-    confirmColor: '#5856D6',
+    title: "确认补救",
+    content: `要消耗 1 张补救券来编辑 ${formattedDate.value} 的${sectionLabel(
+      sectionName
+    )}吗？一张补救券只能补救这一项。`,
+    confirmColor: "#5856D6",
     success: (res) => {
       if (!res.confirm) return;
       uni.request({
         url: `${Global.BASE_URL}/`,
-        method: 'POST',
-        data: { method: 'useRemedyCoupon', section: sectionName, date: formatDate(props.selectedDate) },
-        header: { 'content-type': 'application/x-www-form-urlencoded' },
+        method: "POST",
+        data: {
+          method: "useRemedyCoupon",
+          section: sectionName,
+          date: formatDate(props.selectedDate),
+        },
+        header: { "content-type": "application/x-www-form-urlencoded" },
         success: (resp) => {
           if (responseOk(resp)) {
-            if (sectionName === 'reading') editingReading.value = true;
-            if (sectionName === 'math') editingMath.value = true;
-            if (sectionName === 'class') editingClass.value = true;
-            uni.showToast({ title: '已开启补救编辑', icon: 'none' });
+            if (sectionName === "reading") editingReading.value = true;
+            if (sectionName === "math") editingMath.value = true;
+            if (sectionName === "class") editingClass.value = true;
+            uni.showToast({ title: "已开启补救编辑", icon: "none" });
             loadRemedyCoupons();
           }
-        }
+        },
       });
-    }
+    },
   });
 };
 
@@ -765,16 +1494,20 @@ const onRevokeClick = (sectionName) => {
   requirePassword(() => {
     uni.request({
       url: `${Global.BASE_URL}/`,
-      method: 'POST',
-      data: { method: 'revokeCoupon', section: sectionName, date: formatDate(props.selectedDate) },
-      header: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: "POST",
+      data: {
+        method: "revokeCoupon",
+        section: sectionName,
+        date: formatDate(props.selectedDate),
+      },
+      header: { "content-type": "application/x-www-form-urlencoded" },
       success: (resp) => {
         if (responseOk(resp)) {
-          uni.showToast({ title: '撤销成功并退券', icon: 'none' });
-          emit('saved', formatDate(props.selectedDate)); // 通知父组件刷新
+          uni.showToast({ title: "撤销成功并退券", icon: "none" });
+          emit("saved", formatDate(props.selectedDate)); // 通知父组件刷新
           loadCoupons(); // 刷新数字
         }
-      }
+      },
     });
   });
 };
@@ -785,11 +1518,32 @@ const saveReading = () => {
   const wasRemedyEdit = !isEditable.value && editingReading.value;
   loadingReading.value = true;
   uni.request({
-    url: `${Global.BASE_URL}/`, method: 'POST',
-    data: { method: 'saveStudyRecord', section: 'reading', date: formatDate(props.selectedDate), readingStart: form.readingStart, readingEnd: form.readingEnd },
-    header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { readingActionTime.value = formatActionTime(res.data?.actionTime); if (wasRemedyEdit) readingRemedyUsedAt.value = formatActionTime(res.data?.remedyTime || res.data?.actionTime); showSaveComplete(); editingReading.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
-    complete: () => { loadingReading.value = false; }
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "saveStudyRecord",
+      section: "reading",
+      date: formatDate(props.selectedDate),
+      readingStart: form.readingStart,
+      readingEnd: form.readingEnd,
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (responseOk(res)) {
+        readingActionTime.value = formatActionTime(res.data?.actionTime);
+        if (wasRemedyEdit)
+          readingRemedyUsedAt.value = formatActionTime(
+            res.data?.remedyTime || res.data?.actionTime
+          );
+        showSaveComplete();
+        editingReading.value = false;
+        emit("saved", formatDate(props.selectedDate));
+        loadRemedyCoupons();
+      }
+    },
+    complete: () => {
+      loadingReading.value = false;
+    },
   });
 };
 
@@ -798,11 +1552,33 @@ const saveMath = () => {
   const wasRemedyEdit = !isEditable.value && editingMath.value;
   loadingMath.value = true;
   uni.request({
-    url: `${Global.BASE_URL}/`, method: 'POST',
-    data: { method: 'saveStudyRecord', section: 'math', date: formatDate(props.selectedDate), mathTitle: form.mathTitle, mathMin: form.mathMin, mathSec: form.mathSec },
-    header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { mathActionTime.value = formatActionTime(res.data?.actionTime); if (wasRemedyEdit) mathRemedyUsedAt.value = formatActionTime(res.data?.remedyTime || res.data?.actionTime); showSaveComplete(); editingMath.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
-    complete: () => { loadingMath.value = false; }
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "saveStudyRecord",
+      section: "math",
+      date: formatDate(props.selectedDate),
+      mathTitle: form.mathTitle,
+      mathMin: form.mathMin,
+      mathSec: form.mathSec,
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (responseOk(res)) {
+        mathActionTime.value = formatActionTime(res.data?.actionTime);
+        if (wasRemedyEdit)
+          mathRemedyUsedAt.value = formatActionTime(
+            res.data?.remedyTime || res.data?.actionTime
+          );
+        showSaveComplete();
+        editingMath.value = false;
+        emit("saved", formatDate(props.selectedDate));
+        loadRemedyCoupons();
+      }
+    },
+    complete: () => {
+      loadingMath.value = false;
+    },
   });
 };
 
@@ -811,20 +1587,43 @@ const saveClass = () => {
   const wasRemedyEdit = !isEditable.value && editingClass.value;
   loadingClass.value = true;
   uni.request({
-    url: `${Global.BASE_URL}/`, method: 'POST',
-    data: { method: 'saveStudyRecord', section: 'class', date: formatDate(props.selectedDate), classTitle: form.classTitle, classType: form.classType },
-    header: { 'content-type': 'application/x-www-form-urlencoded' },
-    success: (res) => { if (responseOk(res)) { classActionTime.value = formatActionTime(res.data?.actionTime); if (wasRemedyEdit) classRemedyUsedAt.value = formatActionTime(res.data?.remedyTime || res.data?.actionTime); showSaveComplete(); editingClass.value = false; emit('saved', formatDate(props.selectedDate)); loadRemedyCoupons(); } },
-    complete: () => { loadingClass.value = false; }
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "saveStudyRecord",
+      section: "class",
+      date: formatDate(props.selectedDate),
+      classTitle: form.classTitle,
+      classType: form.classType,
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (responseOk(res)) {
+        classActionTime.value = formatActionTime(res.data?.actionTime);
+        if (wasRemedyEdit)
+          classRemedyUsedAt.value = formatActionTime(
+            res.data?.remedyTime || res.data?.actionTime
+          );
+        showSaveComplete();
+        editingClass.value = false;
+        emit("saved", formatDate(props.selectedDate));
+        loadRemedyCoupons();
+      }
+    },
+    complete: () => {
+      loadingClass.value = false;
+    },
   });
 };
 
 const confirmDelete = () => {
   uni.showModal({
-    title: '确认删除',
-    content: '确定要删除这一天的全部学习记录吗？(若含免除券也会自动退还哦)',
-    confirmColor: '#FF2D55',
-    success: (res) => { if (res.confirm) executeDelete(); }
+    title: "确认删除",
+    content: "确定要删除这一天的全部学习记录吗？(若含免除券也会自动退还哦)",
+    confirmColor: "#FF2D55",
+    success: (res) => {
+      if (res.confirm) executeDelete();
+    },
   });
 };
 
@@ -832,27 +1631,32 @@ const executeDelete = () => {
   deleteLoading.value = true;
   uni.request({
     url: `${Global.BASE_URL}/`,
-    method: 'POST',
-    data: { method: 'deleteStudyRecord', date: formatDate(props.selectedDate) },
-    header: { 'content-type': 'application/x-www-form-urlencoded' },
+    method: "POST",
+    data: { method: "deleteStudyRecord", date: formatDate(props.selectedDate) },
+    header: { "content-type": "application/x-www-form-urlencoded" },
     success: (res) => {
       if (res.data?.code === 0) {
-        uni.showToast({ title: '删除并退券成功', icon: 'none' });
+        uni.showToast({ title: "删除并退券成功", icon: "none" });
         populate(null);
-        emit('deleted', formatDate(props.selectedDate));
+        emit("deleted", formatDate(props.selectedDate));
         loadCoupons(); // 删除可能导致退券，所以刷新一下数字
       } else {
-        showError(res.data?.msg || '删除失败');
+        showError(res.data?.msg || "删除失败");
       }
     },
-    complete: () => { deleteLoading.value = false; }
+    complete: () => {
+      deleteLoading.value = false;
+    },
   });
 };
 
 onUnmounted(() => {
   if (completeFeedbackTimer) clearTimeout(completeFeedbackTimer);
   stopCompleteAudio();
-  if (completeAudio) { completeAudio.destroy(); completeAudio = null; }
+  if (completeAudio) {
+    completeAudio.destroy();
+    completeAudio = null;
+  }
 });
 </script>
 
@@ -865,145 +1669,644 @@ onUnmounted(() => {
 }
 
 .complete-feedback {
-  position: fixed; inset: 0; z-index: 9999;
-  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
-.complete-image { width: 420rpx; max-width: 78vw; border-radius: 18rpx; box-shadow: 0 18rpx 50rpx rgba(0, 0, 0, 0.18); }
+.complete-image {
+  width: 420rpx;
+  max-width: 78vw;
+  border-radius: 18rpx;
+  box-shadow: 0 18rpx 50rpx rgba(0, 0, 0, 0.18);
+}
 
 .date-banner {
-  display: flex; justify-content: space-between; align-items: center;
-  background: #fff1f2; border-radius: 16rpx; padding: 20rpx 30rpx; margin-bottom: 30rpx;
-  .date-label { font-size: 32rpx; font-weight: bold; color: #FF2D55; }
-  .edit-hint  { font-size: 22rpx; color: #FF2D55; }
-  &.readonly-banner { background: #f5f5f5; .date-label, .edit-hint { color: #999; } }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff1f2;
+  border-radius: 16rpx;
+  padding: 20rpx 30rpx;
+  margin-bottom: 30rpx;
+  .date-label {
+    font-size: 32rpx;
+    font-weight: bold;
+    color: #ff2d55;
+  }
+  .edit-hint {
+    font-size: 22rpx;
+    color: #ff2d55;
+  }
+  &.readonly-banner {
+    background: #f5f5f5;
+    .date-label,
+    .edit-hint {
+      color: #999;
+    }
+  }
 }
 
 /* === 免除券 UI 升级 === */
 .coupon-banner {
-  display: flex; justify-content: space-between; align-items: center;
-  background: #FFFBF0; border-radius: 16rpx; padding: 20rpx 30rpx; margin-bottom: 30rpx;
-  border: 1px solid #FFE0B2;
-  .coupon-text { font-size: 28rpx; font-weight: bold; color: #FF9500; }
-  .coupon-actions { display: flex; gap: 16rpx; }
-  .coupon-btn { font-size: 24rpx; padding: 8rpx 24rpx; border-radius: 30rpx; cursor: pointer; }
-  .coupon-btn.add { color: #fff; background: #FF9500; }
-  .coupon-btn.log { color: #FF9500; background: #FFF3E0; border: 1px solid #FFD180; }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fffbf0;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 24rpx;
+  border: 1px solid #ffe0b2;
+  gap: 16rpx;
+
+  .coupon-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+    flex-shrink: 1; // ← 允许收缩但不强制
+    min-width: 0;
+  }
+  .coupon-title {
+    font-size: 28rpx;
+    font-weight: bold;
+    color: #b45309;
+    white-space: nowrap; // ← 标题不换行
+  }
+  .coupon-sub {
+    font-size: 22rpx;
+    color: #d97706;
+    white-space: nowrap; // ← 副标题也不换行
+  }
+  .coupon-actions {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    flex-shrink: 0; // ← 按钮组绝不收缩
+  }
+  .coupon-btn {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    padding: 12rpx 22rpx;
+    border-radius: 999rpx;
+    white-space: nowrap;
+    .btn-icon {
+      font-size: 24rpx;
+      line-height: 1;
+    }
+    .btn-label {
+      font-size: 24rpx;
+    }
+  }
+  .coupon-btn.log {
+    background: #fff7ed;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+  }
+  .coupon-btn.add {
+    background: #ff9500;
+    color: #fff;
+    font-weight: bold;
+  }
+  .coupon-btn.del {
+    background: transparent;
+    border: 1px solid #fca5a5;
+    color: #dc2626;
+  }
 }
 
 .remedy-banner {
-  background: #F4F4FF;
-  border-color: #D8D7FF;
-  margin-top: -16rpx;
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+  margin-top: -10rpx;
+
+  .remedy-title {
+    color: #4c1d95;
+  }
+  .remedy-sub {
+    color: #7c3aed;
+  }
+
+  .coupon-btn.remedy-log {
+    background: #ede9fe;
+    border: 1px solid #c4b5fd;
+    color: #5b21b6;
+  }
+  .coupon-btn.remedy-add {
+    background: #5856d6;
+    color: #fff;
+    font-weight: bold;
+  }
 }
-.coupon-banner .remedy-text { color: #5856D6; }
-.coupon-banner .coupon-btn.remedy-add { color: #fff; background: #5856D6; }
-.coupon-banner .coupon-btn.remedy-log { color: #5856D6; background: #ECEBFF; border: 1px solid #D8D7FF; }
+.coupon-banner .remedy-text {
+  color: #5856d6;
+}
+.coupon-banner .coupon-btn.remedy-add {
+  color: #fff;
+  background: #5856d6;
+}
+.coupon-banner .coupon-btn.remedy-log {
+  color: #5856d6;
+  background: #ecebff;
+  border: 1px solid #d8d7ff;
+}
 
 .coupon-tip {
-  display: flex; flex-direction: column; gap: 12rpx;
-  padding: 24rpx 40rpx; font-size: 32rpx; font-weight: bold;
-  color: #FF2D55; background: #FFF1F2; border-radius: 12rpx; border: 1px dashed #FFD4D9;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding: 24rpx 40rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #ff2d55;
+  background: #fff1f2;
+  border-radius: 12rpx;
+  border: 1px dashed #ffd4d9;
 }
 
 .coupon-tip-main {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 
   .revoke-btn {
-    font-size: 24rpx; font-weight: normal; color: #fff;
-    background: #FF2D55; padding: 8rpx 24rpx; border-radius: 30rpx; cursor: pointer;
+    font-size: 24rpx;
+    font-weight: normal;
+    color: #fff;
+    background: #ff2d55;
+    padding: 8rpx 24rpx;
+    border-radius: 30rpx;
+    cursor: pointer;
   }
 }
 
 .excluded-tip {
-  padding: 30rpx 0; text-align: center; font-size: 32rpx; font-weight: bold;
-  color: #FF9500; background: #FFF8E1; border-radius: 12rpx; border: 1px dashed #FFE0B2;
+  padding: 30rpx 0;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #ff9500;
+  background: #fff8e1;
+  border-radius: 12rpx;
+  border: 1px dashed #ffe0b2;
 }
 
 .card {
-  position: relative; background: #fff; border-radius: 20rpx; padding: 30rpx; margin-bottom: 30rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03); transition: background 0.2s;
-  .card-title { font-size: 32rpx; font-weight: bold; margin-bottom: 30rpx; color: #333; transition: color 0.2s; .card-icon { margin-right: 8rpx; transition: all 0.2s; } }
-  &.card--locked { background: #f7f7f7; box-shadow: none; .card-title { color: #bbb; .card-icon { filter: grayscale(100%); opacity: 0.6; } } text, .split, .label { color: #bbb !important; } :deep(input), :deep(.u-input__content__field-wrapper__field) { color: #bbb !important; -webkit-text-fill-color: #bbb !important; } :deep(.u-radio__text) { color: #bbb !important; } }
+  position: relative;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+  transition: background 0.2s;
+  .card-title {
+    font-size: 32rpx;
+    font-weight: bold;
+    margin-bottom: 30rpx;
+    color: #333;
+    transition: color 0.2s;
+    .card-icon {
+      margin-right: 8rpx;
+      transition: all 0.2s;
+    }
+  }
+  &.card--locked {
+    background: #f7f7f7;
+    box-shadow: none;
+    .card-title {
+      color: #bbb;
+      .card-icon {
+        filter: grayscale(100%);
+        opacity: 0.6;
+      }
+    }
+    text,
+    .split,
+    .label {
+      color: #bbb !important;
+    }
+    :deep(input),
+    :deep(.u-input__content__field-wrapper__field) {
+      color: #bbb !important;
+      -webkit-text-fill-color: #bbb !important;
+    }
+    :deep(.u-radio__text) {
+      color: #bbb !important;
+    }
+  }
 }
 
-.card-action-row { display: flex; }
-.card-action-wrap { display: flex; flex-direction: column; gap: 12rpx; margin-top: 30rpx; }
-.action-btn-block { display: flex; flex-direction: column; gap: 8rpx; flex: 1; }
-.action-btn-block--split { margin-left: 20rpx; }
-.locked-action-block { display: flex; flex-direction: column; gap: 8rpx; width: 100%; }
-.locked-action-block :deep(.u-button) { 
-  min-height: 120rpx !important; 
-  width: 100% !important; 
+.card-action-row {
+  display: flex;
+}
+.card-action-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 30rpx;
+}
+.action-btn-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  flex: 1;
+}
+.action-btn-block--split {
+  margin-left: 20rpx;
+}
+.locked-action-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  width: 100%;
+}
+.locked-action-block :deep(.u-button) {
+  min-height: 120rpx !important;
+  width: 100% !important;
   flex: unset !important;
-  border-radius: 16rpx !important; 
+  border-radius: 16rpx !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
 }
-.locked-action-block :deep(.u-button__text) { font-size: 36rpx !important; font-weight: 600 !important; letter-spacing: 2rpx; }
-.status-time { font-size: 20rpx; color: #999; line-height: 1.2; padding-left: 10rpx; }
-.input-row { display: flex; align-items: center; gap: 20rpx; .split { color: #999; } }
-.time-row { display: flex; align-items: center; gap: 10rpx; font-size: 28rpx; color: #333; .time-input { display: flex; align-items: center; width: 140rpx; gap: 10rpx; } }
-.radio-row { padding-top: 10rpx; }
-.radio-row--locked { pointer-events: none; }
-.radio-row--readonly { pointer-events: none; }
-.radio-row--readonly :deep(.u-radio__label) { color: #bbb !important; }
-.delete-row { margin-top: 10rpx; margin-bottom: 40rpx; }
-.block-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; background: transparent; }
+.locked-action-block :deep(.u-button__text) {
+  font-size: 36rpx !important;
+  font-weight: 600 !important;
+  letter-spacing: 2rpx;
+}
+.status-time {
+  font-size: 20rpx;
+  color: #999;
+  line-height: 1.2;
+  padding-left: 10rpx;
+}
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  .split {
+    color: #999;
+  }
+}
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  font-size: 28rpx;
+  color: #333;
+  .time-input {
+    display: flex;
+    align-items: center;
+    width: 140rpx;
+    gap: 10rpx;
+  }
+}
+.radio-row {
+  padding-top: 10rpx;
+}
+.radio-row--locked {
+  pointer-events: none;
+}
+.radio-row--readonly {
+  pointer-events: none;
+}
+.radio-row--readonly :deep(.u-radio__label) {
+  color: #bbb !important;
+}
+.delete-row {
+  margin-top: 10rpx;
+  margin-bottom: 40rpx;
+}
+.block-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  background: transparent;
+}
 
 /* 弹窗通用样式 */
-.overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 999; display: flex; align-items: center; justify-content: center; }
-.pwd-box { background: #fff; width: 80%; max-width: 600rpx; border-radius: 24rpx; padding: 50rpx 40rpx; box-sizing: border-box; box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.1); }
-.pwd-title { font-size: 34rpx; font-weight: bold; text-align: center; margin-bottom: 40rpx; color: #333; }
-.pwd-input { background: #f5f5f5; height: 88rpx; border-radius: 16rpx; padding: 0 24rpx; font-size: 30rpx; text-align: center; width: 100%; box-sizing: border-box; }
-.btn-row { display: flex; gap: 20rpx; margin-top: 40rpx; }
-.btn-cancel { flex: 1; height: 88rpx; border-radius: 50rpx; border: 1rpx solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #666; }
-.btn-save { flex: 1; height: 88rpx; border-radius: 50rpx; background: #ff2d55; display: flex; align-items: center; justify-content: center; font-size: 30rpx; color: #fff; }
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pwd-box {
+  background: #fff;
+  width: 80%;
+  max-width: 600rpx;
+  border-radius: 24rpx;
+  padding: 50rpx 40rpx;
+  box-sizing: border-box;
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.1);
+}
+.pwd-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 40rpx;
+  color: #333;
+}
+.pwd-input {
+  background: #f5f5f5;
+  height: 88rpx;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 30rpx;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* === 发放弹窗：常用时间区间选择 === */
+.range-select-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+}
+.range-empty-tip {
+  font-size: 24rpx;
+  color: #ff9500;
+  background: #fff7e6;
+  border: 1rpx solid #ffe0b2;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 28rpx;
+  text-align: center;
+}
+.range-select-list {
+  max-height: 320rpx;
+  margin-bottom: 28rpx;
+}
+.range-option {
+  font-size: 26rpx;
+  color: #333;
+  background: #f7f7f7;
+  border: 1rpx solid #eee;
+  border-radius: 14rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 14rpx;
+  text-align: center;
+}
+.range-option-active {
+  color: #fff;
+  background: #ff2d55;
+  border-color: #ff2d55;
+}
+.btn-row {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 40rpx;
+}
+.btn-cancel {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 50rpx;
+  border: 1rpx solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  color: #666;
+}
+.btn-save {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 50rpx;
+  background: #ff2d55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  color: #fff;
+}
 
 /* === 新增：日志列表弹窗专属样式 === */
-.log-box { 
-  background: #fff; width: 90%; max-width: 680rpx; border-radius: 24rpx; 
-  padding: 40rpx; box-sizing: border-box; display: flex; flex-direction: column;
+.log-box {
+  background: #fff;
+  width: 90%;
+  max-width: 680rpx;
+  border-radius: 24rpx;
+  padding: 40rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
-.log-scroll { height: 50vh; margin-top: 20rpx; }
-.log-item { 
-  display: flex; justify-content: space-between; align-items: center; 
-  padding: 24rpx 0; border-bottom: 1rpx solid #f5f5f5; 
+.log-scroll {
+  height: 50vh;
+  margin-top: 20rpx;
 }
-.log-info { display: flex; flex-direction: column; gap: 10rpx; flex: 1; padding-right: 20rpx;}
-.log-detail { font-size: 28rpx; color: #333; }
-.log-time { font-size: 24rpx; color: #999; }
-.log-amount { font-size: 36rpx; font-weight: bold; }
-.log-amount.positive { color: #FF9500; }
-.log-amount.negative { color: #34C759; } /* 消耗显示绿色 */
-.remedy-amount.positive { color: #5856D6; }
-.remedy-amount.negative { color: #34C759; }
-.remedy-save { background: #5856D6; }
-.empty-log, .no-more { text-align: center; font-size: 24rpx; color: #ccc; padding: 30rpx 0; }
-.loading-more { text-align: center; font-size: 24rpx; color: #999; padding: 20rpx 0; }
+.log-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+.log-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  flex: 1;
+  padding-right: 20rpx;
+}
+.log-detail {
+  font-size: 28rpx;
+  color: #333;
+}
+.log-time {
+  font-size: 24rpx;
+  color: #999;
+}
+.log-amount {
+  font-size: 36rpx;
+  font-weight: bold;
+}
+.log-amount.positive {
+  color: #ff9500;
+}
+.log-amount.negative {
+  color: #34c759;
+} /* 消耗显示绿色 */
+.remedy-amount.positive {
+  color: #5856d6;
+}
+.remedy-amount.negative {
+  color: #34c759;
+}
+.remedy-save {
+  background: #5856d6;
+}
+.empty-log,
+.no-more {
+  text-align: center;
+  font-size: 24rpx;
+  color: #ccc;
+  padding: 30rpx 0;
+}
+.loading-more {
+  text-align: center;
+  font-size: 24rpx;
+  color: #999;
+  padding: 20rpx 0;
+}
 /* ================================== */
 
-.modal-anim-enter-active { animation: fadeIn 0.3s ease forwards; }
-.modal-anim-leave-active { animation: fadeOut 0.3s ease forwards; }
-.modal-anim-enter-active .pwd-box, .modal-anim-enter-active .log-box { animation: popIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
-.modal-anim-leave-active .pwd-box, .modal-anim-leave-active .log-box { animation: popOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
+.modal-anim-enter-active {
+  animation: fadeIn 0.3s ease forwards;
+}
+.modal-anim-leave-active {
+  animation: fadeOut 0.3s ease forwards;
+}
+.modal-anim-enter-active .pwd-box,
+.modal-anim-enter-active .log-box {
+  animation: popIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+.modal-anim-leave-active .pwd-box,
+.modal-anim-leave-active .log-box {
+  animation: popOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
 
-@keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes fadeOut { 0% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-@keyframes popOut { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0; } }
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes popIn {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes popOut {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
 
 @media (min-width: 1024px) {
-  .entry-container { 
-    padding: 24px 10px; 
-    padding-bottom: calc(100px + env(safe-area-inset-bottom));
-    :deep(input), :deep(.u-input__content__field-wrapper__field), :deep(.u-radio__text), .label, .time-input text, .split { font-size: 18px !important; } 
-    .date-banner { padding: 20px 24px; .date-label { font-size: 22px; } .edit-hint { font-size: 15px; } } 
-    .card { padding: 30px; margin-bottom: 24px; .card-title { font-size: 20px; margin-bottom: 24px; .card-icon { font-size: 24px; } } } 
-    :deep(.u-button__text) { font-size: 16px !important; } 
-    .locked-action-block :deep(.u-button) { min-height: 54px !important; width: 100% !important; flex: unset !important; padding-left: 0 !important; padding-right: 0 !important; }
-    .locked-action-block :deep(.u-button__text) { font-size: 20px !important; } 
-    .status-time { font-size: 14px; }
+  .coupon-banner {
+    padding: 18px 20px;
+    border-radius: 14px;
+    flex-direction: column;    // ← 改成竖排：上面信息，下面按钮
+    align-items: stretch;
+    gap: 14px;
+
+    .coupon-left {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+    .coupon-title {
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .coupon-sub {
+      font-size: 12px;
+      white-space: nowrap;
+      margin-left: auto;       // ← 张数信息推到右边
+    }
+
+    .coupon-actions {
+      display: flex;
+      gap: 8px;
+      width: 100%;             // ← 按钮组撑满整行
+
+      .coupon-btn {
+        flex: 1;               // ← 三个按钮等宽
+        justify-content: center;
+        padding: 8px 0;
+        border-radius: 999px;
+        .btn-icon  { font-size: 13px; }
+        .btn-label { font-size: 13px; }
+      }
+    }
   }
-  .complete-image { width: min(32vw, 520px); max-width: 520px; }
+
+  .remedy-banner {
+    margin-top: -6px;
+  }
+  .entry-container {
+    padding: 24px 10px;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    :deep(input),
+    :deep(.u-input__content__field-wrapper__field),
+    :deep(.u-radio__text),
+    .label,
+    .time-input text,
+    .split {
+      font-size: 18px !important;
+    }
+    .date-banner {
+      padding: 20px 24px;
+      .date-label {
+        font-size: 22px;
+      }
+      .edit-hint {
+        font-size: 15px;
+      }
+    }
+    .card {
+      padding: 30px;
+      margin-bottom: 24px;
+      .card-title {
+        font-size: 20px;
+        margin-bottom: 24px;
+        .card-icon {
+          font-size: 24px;
+        }
+      }
+    }
+    :deep(.u-button__text) {
+      font-size: 16px !important;
+    }
+    .locked-action-block :deep(.u-button) {
+      min-height: 54px !important;
+      width: 100% !important;
+      flex: unset !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
+    .locked-action-block :deep(.u-button__text) {
+      font-size: 20px !important;
+    }
+    .status-time {
+      font-size: 14px;
+    }
+  }
+  .complete-image {
+    width: min(32vw, 520px);
+    max-width: 520px;
+  }
 }
 </style>

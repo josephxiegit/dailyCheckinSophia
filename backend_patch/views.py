@@ -8,6 +8,8 @@ import datetime
 import numpy as np
 import time
 from django.utils import timezone
+from django.db import connections
+from django.db.models import F
 from homeworkonline.get_questions import main_get_question
 from homeworkonline.return_question import main_return_question
 
@@ -49,6 +51,44 @@ class DailyCheckinAPIView(APIView):
             if section == 'class':
                 return record.class_title == '媛媛免除'
             return False
+
+        def ensure_couponbatch_table():
+            # checkindb 上没有走 Django 迁移，这里幂等建表（首个券请求时创建）
+            conn = connections['checkindb']
+            if 'app01_couponbatch' not in conn.introspection.table_names():
+                with conn.schema_editor() as se:
+                    se.create_model(CouponBatch)
+
+        def covering_batches(coupon_type, date_str):
+            # 返回所有「区间覆盖该日期」的批次，按最早到期排序（最早到期优先消费/退还）
+            return (
+                CouponBatch.objects.using('checkindb')
+                .filter(coupon_type=coupon_type, start_date__lte=date_str, end_date__gte=date_str)
+                .order_by('end_date')
+            )
+
+        def coupon_summary(coupon_type):
+            # 聚合某类型所有批次，返回 {total, used, remaining, batches:[...]}
+            ensure_couponbatch_table()
+            batches = (
+                CouponBatch.objects.using('checkindb')
+                .filter(coupon_type=coupon_type)
+                .order_by('end_date')
+            )
+            total = used = 0
+            items = []
+            for b in batches:
+                remaining = b.total_coupons - b.used_coupons
+                total += b.total_coupons
+                used += b.used_coupons
+                items.append({
+                    'startDate': str(b.start_date).split(' ')[0],
+                    'endDate': str(b.end_date).split(' ')[0],
+                    'total': b.total_coupons,
+                    'used': b.used_coupons,
+                    'remaining': remaining,
+                })
+            return {'total': total, 'used': used, 'remaining': total - used, 'batches': items}
 
         def merge_remedy_log_fallback(remedy_dict, logs):
             section_name_map = {
@@ -213,13 +253,17 @@ class DailyCheckinAPIView(APIView):
                     if record.class_title == '媛媛免除': refund_count += 1
                     
                     if refund_count > 0:
-                        coupon = CouponData.objects.using('checkindb').first()
-                        if coupon:
-                            coupon.used_coupons -= refund_count
-                            if coupon.used_coupons < 0:
-                                coupon.used_coupons = 0
-                            coupon.save()
-                    
+                        ensure_couponbatch_table()
+                        # 逐张退还到「覆盖该日期、且已用>0、最早到期」的免除券批次
+                        for _ in range(refund_count):
+                            rb = covering_batches('exempt', target_date).filter(
+                                used_coupons__gt=0).first()
+                            if not rb:
+                                break
+                            rb.used_coupons -= 1
+                            if rb.used_coupons < 0: rb.used_coupons = 0
+                            rb.save()
+
                     record.delete()
                     return JsonResponse({'code': 0, 'msg': '删除成功，已返还免除券'})
                 else:
@@ -462,21 +506,17 @@ class DailyCheckinAPIView(APIView):
             
         elif method == 'getCoupon':
             try:
-                obj = CouponData.objects.using('checkindb').first()
-                if not obj:
-                    obj = CouponData.objects.using('checkindb').create(total_coupons=0, used_coupons=0)
-                remaining = obj.total_coupons - obj.used_coupons
-                return JsonResponse({'code': 0, 'total': obj.total_coupons, 'used': obj.used_coupons, 'remaining': remaining})
+                s = coupon_summary('exempt')
+                return JsonResponse({'code': 0, 'total': s['total'], 'used': s['used'],
+                                     'remaining': s['remaining'], 'batches': s['batches']})
             except Exception as e:
                 return JsonResponse({'code': 1, 'msg': str(e)})
 
         elif method == 'getRemedyCoupon':
             try:
-                obj = RemedyCouponData.objects.using('checkindb').first()
-                if not obj:
-                    obj = RemedyCouponData.objects.using('checkindb').create(total_coupons=0, used_coupons=0)
-                remaining = obj.total_coupons - obj.used_coupons
-                return JsonResponse({'code': 0, 'total': obj.total_coupons, 'used': obj.used_coupons, 'remaining': remaining})
+                s = coupon_summary('remedy')
+                return JsonResponse({'code': 0, 'total': s['total'], 'used': s['used'],
+                                     'remaining': s['remaining'], 'batches': s['batches']})
             except Exception as e:
                 return JsonResponse({'code': 1, 'msg': str(e)})
 
@@ -486,17 +526,28 @@ class DailyCheckinAPIView(APIView):
                 if not raw_count:
                     raw_count = request.POST.get('count', 0)
                 count = int(raw_count)
-                
-                obj = CouponData.objects.using('checkindb').first()
-                if not obj:
-                    obj = CouponData.objects.using('checkindb').create(total_coupons=count, used_coupons=0)
-                else:
-                    obj.total_coupons += count
-                    obj.save()
-                    
-                # 写入日志
-                CouponLog.objects.using('checkindb').create(action='add', amount=count, detail=f"增加免除券 {count} 张")
-                
+                if count <= 0:
+                    return JsonResponse({'code': 1, 'msg': '数量必须大于 0'})
+
+                start_date = request.data.get('startDate')
+                end_date = request.data.get('endDate')
+                if not start_date or not end_date:
+                    return JsonResponse({'code': 1, 'msg': '请选择要绑定的常用时间区间'})
+                if not savedDateRange.objects.using('checkindb').filter(
+                        start_date=start_date, end_date=end_date).exists():
+                    return JsonResponse({'code': 1, 'msg': '请先在区间记录中保存该常用时间段'})
+
+                ensure_couponbatch_table()
+                batch, _ = CouponBatch.objects.using('checkindb').get_or_create(
+                    coupon_type='exempt', start_date=start_date, end_date=end_date,
+                    defaults={'total_coupons': 0, 'used_coupons': 0})
+                batch.total_coupons += count
+                batch.save()
+
+                CouponLog.objects.using('checkindb').create(
+                    action='add', amount=count,
+                    detail=f"增加免除券 {count} 张（{start_date} 至 {end_date}）")
+
                 return JsonResponse({'code': 0, 'msg': '添加成功'})
             except Exception as e:
                 return JsonResponse({'code': 1, 'msg': f"添加失败: {str(e)}"})
@@ -509,19 +560,105 @@ class DailyCheckinAPIView(APIView):
                 count = int(raw_count)
                 if count <= 0:
                     return JsonResponse({'code': 1, 'msg': '数量必须大于 0'})
-                
-                obj = RemedyCouponData.objects.using('checkindb').first()
-                if not obj:
-                    obj = RemedyCouponData.objects.using('checkindb').create(total_coupons=count, used_coupons=0)
-                else:
-                    obj.total_coupons += count
-                    obj.save()
-                    
-                RemedyCouponLog.objects.using('checkindb').create(action='add', amount=count, detail=f"增加补救券 {count} 张")
-                
+
+                start_date = request.data.get('startDate')
+                end_date = request.data.get('endDate')
+                if not start_date or not end_date:
+                    return JsonResponse({'code': 1, 'msg': '请选择要绑定的常用时间区间'})
+                if not savedDateRange.objects.using('checkindb').filter(
+                        start_date=start_date, end_date=end_date).exists():
+                    return JsonResponse({'code': 1, 'msg': '请先在区间记录中保存该常用时间段'})
+
+                ensure_couponbatch_table()
+                batch, _ = CouponBatch.objects.using('checkindb').get_or_create(
+                    coupon_type='remedy', start_date=start_date, end_date=end_date,
+                    defaults={'total_coupons': 0, 'used_coupons': 0})
+                batch.total_coupons += count
+                batch.save()
+
+                RemedyCouponLog.objects.using('checkindb').create(
+                    action='add', amount=count,
+                    detail=f"增加补救券 {count} 张（{start_date} 至 {end_date}）")
+
                 return JsonResponse({'code': 0, 'msg': '添加成功'})
             except Exception as e:
                 return JsonResponse({'code': 1, 'msg': f"添加失败: {str(e)}"})
+
+        elif method == 'reduceCoupon':
+            try:
+                raw_count = request.data.get('count')
+                if not raw_count:
+                    raw_count = request.POST.get('count', 0)
+                count = int(raw_count)
+                if count <= 0:
+                    return JsonResponse({'code': 1, 'msg': '数量必须大于 0'})
+
+                start_date = request.data.get('startDate')
+                end_date = request.data.get('endDate')
+                if not start_date or not end_date:
+                    return JsonResponse({'code': 1, 'msg': '请选择要删除的区间'})
+
+                ensure_couponbatch_table()
+                batch = CouponBatch.objects.using('checkindb').filter(
+                    coupon_type='exempt', start_date=start_date, end_date=end_date).first()
+                if not batch:
+                    return JsonResponse({'code': 1, 'msg': '该区间没有免除券'})
+
+                remaining = batch.total_coupons - batch.used_coupons
+                if count > remaining:
+                    return JsonResponse({'code': 1, 'msg': f'最多只能删除未使用的 {remaining} 张'})
+
+                batch.total_coupons -= count
+                if batch.total_coupons <= 0:
+                    batch.delete()
+                else:
+                    batch.save()
+
+                CouponLog.objects.using('checkindb').create(
+                    action='reduce', amount=-count,
+                    detail=f"删除免除券 {count} 张（{start_date} 至 {end_date}）")
+
+                return JsonResponse({'code': 0, 'msg': '删除成功'})
+            except Exception as e:
+                return JsonResponse({'code': 1, 'msg': f"删除失败: {str(e)}"})
+
+        elif method == 'reduceRemedyCoupon':
+            try:
+                raw_count = request.data.get('count')
+                if not raw_count:
+                    raw_count = request.POST.get('count', 0)
+                count = int(raw_count)
+                if count <= 0:
+                    return JsonResponse({'code': 1, 'msg': '数量必须大于 0'})
+
+                start_date = request.data.get('startDate')
+                end_date = request.data.get('endDate')
+                if not start_date or not end_date:
+                    return JsonResponse({'code': 1, 'msg': '请选择要删除的区间'})
+
+                ensure_couponbatch_table()
+                batch = CouponBatch.objects.using('checkindb').filter(
+                    coupon_type='remedy', start_date=start_date, end_date=end_date).first()
+                if not batch:
+                    return JsonResponse({'code': 1, 'msg': '该区间没有补救券'})
+
+                remaining = batch.total_coupons - batch.used_coupons
+                if count > remaining:
+                    return JsonResponse({'code': 1, 'msg': f'最多只能删除未使用的 {remaining} 张'})
+
+                batch.total_coupons -= count
+                if batch.total_coupons <= 0:
+                    batch.delete()
+                else:
+                    batch.save()
+
+                RemedyCouponLog.objects.using('checkindb').create(
+                    action='reduce', amount=-count,
+                    detail=f"删除补救券 {count} 张（{start_date} 至 {end_date}）")
+
+                return JsonResponse({'code': 0, 'msg': '删除成功'})
+            except Exception as e:
+                return JsonResponse({'code': 1, 'msg': f"删除失败: {str(e)}"})
 
         elif method == 'useCoupon':
             try:
@@ -529,11 +666,13 @@ class DailyCheckinAPIView(APIView):
                 section = request.data.get('section')
                 section_map = {'reading': '英语阅读', 'math': '数学练习', 'class': '英语网课'}
                 now = timezone.now()
-                
-                obj = CouponData.objects.using('checkindb').first()
-                if not obj or (obj.total_coupons - obj.used_coupons) <= 0:
-                    return JsonResponse({'code': 1, 'msg': '免除券不足！'})
-                
+
+                ensure_couponbatch_table()
+                batch = covering_batches('exempt', target_date).filter(
+                    used_coupons__lt=F('total_coupons')).first()
+                if not batch:
+                    return JsonResponse({'code': 1, 'msg': '该日期没有可用免除券（不在已绑定区间内或已用完）'})
+
                 update_defaults = {}
                 if section == 'reading':
                     update_defaults['reading_start'] = -1
@@ -552,10 +691,10 @@ class DailyCheckinAPIView(APIView):
                     return JsonResponse({'code': 1, 'msg': '未知模块'})
                 
                 record, _ = dailyCheckinRecords.objects.using('checkindb').update_or_create(date=target_date, defaults=update_defaults)
-                
-                obj.used_coupons += 1
-                obj.save()
-                
+
+                batch.used_coupons += 1
+                batch.save()
+
                 # 写入日志
                 CouponLog.objects.using('checkindb').create(action='use', amount=-1, detail=f"使用抵消: {target_date} {section_map.get(section, '')}")
                 
@@ -592,14 +731,16 @@ class DailyCheckinAPIView(APIView):
                 if existing:
                     return JsonResponse({'code': 0, 'msg': '已开启补救编辑'})
                 
-                obj = RemedyCouponData.objects.using('checkindb').first()
-                if not obj or (obj.total_coupons - obj.used_coupons) <= 0:
-                    return JsonResponse({'code': 1, 'msg': '补救券不足！'})
-                
+                ensure_couponbatch_table()
+                batch = covering_batches('remedy', target_date).filter(
+                    used_coupons__lt=F('total_coupons')).first()
+                if not batch:
+                    return JsonResponse({'code': 1, 'msg': '该日期没有可用补救券（不在已绑定区间内或已用完）'})
+
                 RemedyCouponUsage.objects.using('checkindb').create(date=target_date, section=section)
-                obj.used_coupons += 1
-                obj.save()
-                
+                batch.used_coupons += 1
+                batch.save()
+
                 RemedyCouponLog.objects.using('checkindb').create(
                     action='use',
                     amount=-1,
@@ -634,14 +775,16 @@ class DailyCheckinAPIView(APIView):
                 else:
                     return JsonResponse({'code': 1, 'msg': '该项不是免除状态'})
                 record.save()
-                
-                # 退还免除券
-                obj = CouponData.objects.using('checkindb').first()
-                if obj:
-                    obj.used_coupons -= 1
-                    if obj.used_coupons < 0: obj.used_coupons = 0
-                    obj.save()
-                    
+
+                # 退还免除券到对应区间批次
+                ensure_couponbatch_table()
+                refund_batch = covering_batches('exempt', target_date).filter(
+                    used_coupons__gt=0).first()
+                if refund_batch:
+                    refund_batch.used_coupons -= 1
+                    if refund_batch.used_coupons < 0: refund_batch.used_coupons = 0
+                    refund_batch.save()
+
                 # 写入日志
                 CouponLog.objects.using('checkindb').create(action='revoke', amount=1, detail=f"撤销使用: {target_date} {section_map.get(section, '')}")
                 
@@ -712,11 +855,16 @@ class DailyCheckinAPIView(APIView):
                     if record.class_title == '媛媛免除': refund_count += 1
                     
                     if refund_count > 0:
-                        coupon = CouponData.objects.using('checkindb').first()
-                        if coupon:
-                            coupon.used_coupons -= refund_count
-                            if coupon.used_coupons < 0: coupon.used_coupons = 0
-                            coupon.save()
+                        ensure_couponbatch_table()
+                        # 逐张退还到「覆盖该日期、且已用>0、最早到期」的免除券批次
+                        for _ in range(refund_count):
+                            rb = covering_batches('exempt', target_date).filter(
+                                used_coupons__gt=0).first()
+                            if not rb:
+                                break
+                            rb.used_coupons -= 1
+                            if rb.used_coupons < 0: rb.used_coupons = 0
+                            rb.save()
                         # 写入日志
                         CouponLog.objects.using('checkindb').create(action='refund', amount=refund_count, detail=f"删除记录: {target_date} 退还免除券")
                     
