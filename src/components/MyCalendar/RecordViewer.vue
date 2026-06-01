@@ -160,7 +160,7 @@
         v-if="showResult"
         class="overlay"
         :class="{ 'wide-overlay': isWide }"
-        @click="showResult = false"
+        @click="closeResult"
       >
         <view
           class="popup-box result-box"
@@ -189,6 +189,10 @@
               <text class="stat-num">{{ totalExcluded }}</text>
               <text class="stat-label">已免除项</text>
             </view>
+          </view>
+
+          <view v-if="resultEditMode" class="edit-hint">
+            点击下方「—」项即可设为免除；再次点击可取消（媛媛免除项不可修改）
           </view>
 
           <scroll-view scroll-y class="dynamic-scroll">
@@ -224,7 +228,15 @@
                 <text v-if="hasActualRecord(r, 'reading')" class="record-val"
                   >第 {{ r.reading_start }} - {{ r.reading_end }} 页</text
                 >
-                <text v-else class="record-val empty-val">
+                <text
+                  v-else
+                  class="record-val empty-val"
+                  :class="{
+                    'editable-exempt':
+                      resultEditMode && !isCouponExempt(r, 'reading'),
+                  }"
+                  @click="onResultExemptTap(r, 'reading')"
+                >
                   <text
                     v-if="isExcludedOrExempt(r, 'reading')"
                     style="color: #34c759"
@@ -241,7 +253,15 @@
                     r.math_sec
                   }}秒）</text
                 >
-                <text v-else class="record-val empty-val">
+                <text
+                  v-else
+                  class="record-val empty-val"
+                  :class="{
+                    'editable-exempt':
+                      resultEditMode && !isCouponExempt(r, 'math'),
+                  }"
+                  @click="onResultExemptTap(r, 'math')"
+                >
                   <text
                     v-if="isExcludedOrExempt(r, 'math')"
                     style="color: #34c759"
@@ -256,7 +276,15 @@
                 <text v-if="hasActualRecord(r, 'class')" class="record-val"
                   >{{ r.class_title }}（{{ r.class_type }}）</text
                 >
-                <text v-else class="record-val empty-val">
+                <text
+                  v-else
+                  class="record-val empty-val"
+                  :class="{
+                    'editable-exempt':
+                      resultEditMode && !isCouponExempt(r, 'class'),
+                  }"
+                  @click="onResultExemptTap(r, 'class')"
+                >
                   <text
                     v-if="isExcludedOrExempt(r, 'class')"
                     style="color: #34c759"
@@ -268,13 +296,19 @@
             </view>
           </scroll-view>
 
-          <view class="btn-row">
-            <view class="btn-cancel" style="flex: 1" @click="showResult = false"
-              >关闭</view
+          <view v-if="!resultEditMode" class="btn-row btn-row-triple">
+            <view class="btn-cancel" @click="closeResult">关闭</view>
+            <view class="btn-edit" @click="enterResultEditMode">编辑免除</view>
+            <view class="btn-save" @click="onReselectClick">重新选择</view>
+          </view>
+          <view v-else class="btn-row">
+            <view class="btn-cancel" style="flex: 1" @click="cancelResultEditMode"
+              >取消</view
             >
-            <view class="btn-save" style="flex: 1" @click="onReselectClick"
-              >重新选择</view
-            >
+            <view class="btn-save" style="flex: 1" @click="saveResultExclusions">
+              <text v-if="!savingExclusions">保存免除</text>
+              <text v-else>保存中...</text>
+            </view>
           </view>
         </view>
       </view>
@@ -379,6 +413,11 @@ const showPicker = ref(false);
 const showExclusionPicker = ref(false);
 const showResult = ref(false);
 const loading = ref(false);
+
+// === 结果页内编辑免除项（仅针对无内容的项，区别于“媛媛免除”） ===
+const resultEditMode = ref(false);
+const savingExclusions = ref(false);
+const exclusionsSnapshot = ref([]);
 const startDate = ref("");
 const endDate = ref("");
 const records = ref([]);
@@ -673,6 +712,70 @@ const onReselectClick = () => {
   });
 };
 
+// === 结果页：进入/退出/保存“编辑免除项”模式 ===
+const enterResultEditMode = () => {
+  requirePassword(() => {
+    exclusionsSnapshot.value = [...exclusionsList.value];
+    resultEditMode.value = true;
+  });
+};
+
+const cancelResultEditMode = () => {
+  exclusionsList.value = [...exclusionsSnapshot.value];
+  resultEditMode.value = false;
+  calcStats();
+};
+
+const closeResult = () => {
+  if (resultEditMode.value) {
+    // 未保存的临时改动需还原，避免误以为已生效
+    exclusionsList.value = [...exclusionsSnapshot.value];
+    resultEditMode.value = false;
+  }
+  showResult.value = false;
+};
+
+// 点击某天某项：仅“无内容”的项可切换免除（媛媛免除项与已有记录不可改）
+const onResultExemptTap = (r, section) => {
+  if (!resultEditMode.value) return;
+  if (hasActualRecord(r, section)) return;
+  if (isCouponExempt(r, section)) return;
+  toggleExclude(r.date, section);
+  calcStats();
+};
+
+const saveResultExclusions = () => {
+  if (savingExclusions.value) return;
+  savingExclusions.value = true;
+  uni.request({
+    url: `${Global.BASE_URL}/`,
+    method: "POST",
+    data: {
+      method: "saveExclusions",
+      exclusions: JSON.stringify(exclusionsList.value),
+    },
+    header: { "content-type": "application/x-www-form-urlencoded" },
+    success: (res) => {
+      if (res.data?.code === 0) {
+        exclusionsSnapshot.value = [...exclusionsList.value];
+        resultEditMode.value = false;
+        uni.showToast({ title: "已保存", icon: "success" });
+      } else {
+        uni.showToast({
+          title: res.data?.msg || "保存免除项失败",
+          icon: "none",
+        });
+      }
+    },
+    fail: () => {
+      uni.showToast({ title: "网络请求异常", icon: "none" });
+    },
+    complete: () => {
+      savingExclusions.value = false;
+    },
+  });
+};
+
 const confirmExclusionsAndFetch = () => {
   loading.value = true;
   uni.request({
@@ -861,6 +964,7 @@ const fetchRecords = () => {
         }
 
         records.value = fullList;
+        resultEditMode.value = false;
         showPicker.value = false;
         showResult.value = true;
 
@@ -1139,6 +1243,40 @@ defineExpose({
   font-size: 30rpx;
   color: #fff;
 }
+.btn-edit {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 50rpx;
+  border: 1rpx solid #ffd591;
+  background: #fff7e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  color: #ff9500;
+}
+/* 三按钮并排时收紧字号与按钮内边距，避免窄屏换行 */
+.btn-row-triple .btn-cancel,
+.btn-row-triple .btn-edit,
+.btn-row-triple .btn-save {
+  font-size: 26rpx;
+}
+
+/* 编辑免除模式：可点击的“无内容”项加虚线下划线提示 */
+.editable-exempt {
+  text-decoration: underline dotted #ff9500;
+  text-underline-offset: 6rpx;
+}
+.edit-hint {
+  font-size: 22rpx;
+  color: #ff9500;
+  background: #fff7e6;
+  border: 1rpx solid #ffe0b2;
+  border-radius: 12rpx;
+  padding: 14rpx 20rpx;
+  margin-bottom: 20rpx;
+  line-height: 1.5;
+}
 
 .stat-row {
   display: flex;
@@ -1350,9 +1488,15 @@ defineExpose({
   font-size: 18px;
 }
 .result-drawer-left .btn-cancel,
+.result-drawer-left .btn-edit,
 .result-drawer-left .btn-save {
   height: 56px;
   font-size: 18px;
+}
+.result-drawer-left .btn-row-triple .btn-cancel,
+.result-drawer-left .btn-row-triple .btn-edit,
+.result-drawer-left .btn-row-triple .btn-save {
+  font-size: 16px;
 }
 
 .popup-bottom {

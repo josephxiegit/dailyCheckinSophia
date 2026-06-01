@@ -662,11 +662,14 @@ class DailyCheckinAPIView(APIView):
                 
                 data = []
                 for log in logs:
+                    ct = log.create_time
+                    if ct and timezone.is_aware(ct):
+                        ct = timezone.localtime(ct)
                     data.append({
                         'id': log.nid,
                         'amount': log.amount,
                         'detail': log.detail,
-                        'time': log.create_time.strftime("%Y-%m-%d %H:%M:%S") # 格式化时间
+                        'time': ct.strftime("%Y-%m-%d %H:%M:%S") if ct else '' # 转本地时区后格式化
                     })
                 return JsonResponse({'code': 0, 'data': data, 'total': total})
             except Exception as e:
@@ -684,11 +687,14 @@ class DailyCheckinAPIView(APIView):
                 
                 data = []
                 for log in logs:
+                    ct = log.create_time
+                    if ct and timezone.is_aware(ct):
+                        ct = timezone.localtime(ct)
                     data.append({
                         'id': log.nid,
                         'amount': log.amount,
                         'detail': log.detail,
-                        'time': log.create_time.strftime("%Y-%m-%d %H:%M:%S")
+                        'time': ct.strftime("%Y-%m-%d %H:%M:%S") if ct else '' # 转本地时区后格式化
                     })
                 return JsonResponse({'code': 0, 'data': data, 'total': total})
             except Exception as e:
