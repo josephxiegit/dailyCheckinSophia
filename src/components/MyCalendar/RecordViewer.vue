@@ -301,7 +301,7 @@
             <view class="btn-edit" @click="enterResultEditMode">编辑免除</view>
             <view class="btn-save" @click="onReselectClick">重新选择</view>
           </view>
-          <view v-else class="btn-row">
+          <view v-else class="btn-row mobile-safe-footer">
             <view class="btn-cancel" style="flex: 1" @click="cancelResultEditMode"
               >取消</view
             >
@@ -1009,6 +1009,8 @@ defineExpose({
   position: fixed !important;
 }
 .overlay {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-bottom-legacy: constant(safe-area-inset-bottom);
   position: fixed;
   top: 0;
   left: 0;
@@ -1036,6 +1038,23 @@ defineExpose({
 .popup-box .btn-row {
   padding: 30rpx 0 60rpx;
   margin-top: 0;
+}
+.mobile-safe-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin-left: -30rpx;
+  margin-right: -30rpx;
+  padding: 24rpx 30rpx calc(28rpx + var(--safe-bottom));
+  padding-bottom: calc(28rpx + var(--safe-bottom-legacy));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.92) 18%,
+    #fff 38%
+  );
+  box-shadow: 0 -10rpx 24rpx rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(8px);
 }
 .result-box {
   display: flex;
@@ -1500,7 +1519,8 @@ defineExpose({
 }
 
 .popup-bottom {
-  padding-bottom: 0;
+  padding-bottom: calc(20rpx + var(--safe-bottom));
+  padding-bottom: calc(20rpx + var(--safe-bottom-legacy));
 }
 /* #ifdef MP-WEIXIN */
 .popup-bottom {
