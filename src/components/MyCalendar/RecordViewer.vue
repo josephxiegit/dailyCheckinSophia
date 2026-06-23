@@ -249,9 +249,7 @@
               <view class="record-row">
                 <text class="record-tag">🔢 数学</text>
                 <text v-if="hasActualRecord(r, 'math')" class="record-val"
-                  >{{ r.math_title }}（{{ r.math_min }}分{{
-                    r.math_sec
-                  }}秒）</text
+                  >{{ formatMathRecord(r) }}</text
                 >
                 <text
                   v-else
@@ -428,6 +426,13 @@ const totalExcluded = ref(0);
 
 const rangeDates = ref([]);
 const exclusionsList = ref([]);
+const MATH_PAGE_MODE_START_DATE = "2026-06-24";
+
+const formatMathRecord = (record) => {
+  if (!record?.math_title) return "";
+  if (record.date >= MATH_PAGE_MODE_START_DATE) return `${record.math_title}页`;
+  return `${record.math_title}（${record.math_min}分${record.math_sec}秒）`;
+};
 
 // === 密码验证逻辑 ===
 const showPwdDialog = ref(false);

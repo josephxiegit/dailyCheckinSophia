@@ -181,38 +181,59 @@
       </view>
 
       <block v-else>
-        <u-input
-          v-model="form.mathTitle"
-          placeholder="练习题目内容"
-          :disabled="!canEditMath || isLockedMath"
-          :border="false"
-          customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"
-        ></u-input>
-        <view class="time-row">
-          <text class="label">时长：</text>
-          <view class="time-input">
-            <u-input
-              v-model="form.mathMin"
-              type="number"
-              placeholder="分"
-              :disabled="!canEditMath || isLockedMath"
-              :border="false"
-              customStyle="border-bottom: 1px solid #f0f0f0;"
-            ></u-input>
-            <text>分</text>
-          </view>
-          <view class="time-input">
-            <u-input
-              v-model="form.mathSec"
-              type="number"
-              placeholder="秒"
-              :disabled="!canEditMath || isLockedMath"
-              :border="false"
-              customStyle="border-bottom: 1px solid #f0f0f0;"
-            ></u-input>
-            <text>秒</text>
-          </view>
+        <view v-if="isMathPageMode" class="input-row">
+          <u-input
+            v-model="form.mathStart"
+            placeholder="开始页码"
+            type="number"
+            :disabled="!canEditMath || isLockedMath"
+            :border="false"
+            customStyle="border-bottom: 1px solid #f0f0f0;"
+          ></u-input>
+          <text class="split">-</text>
+          <u-input
+            v-model="form.mathEnd"
+            placeholder="结束页码"
+            type="number"
+            :disabled="!canEditMath || isLockedMath"
+            :border="false"
+            customStyle="border-bottom: 1px solid #f0f0f0;"
+          ></u-input>
         </view>
+        <block v-else>
+          <u-input
+            v-model="form.mathTitle"
+            placeholder="练习题目内容"
+            :disabled="!canEditMath || isLockedMath"
+            :border="false"
+            customStyle="border-bottom: 1px solid #f0f0f0; margin-bottom: 30rpx;"
+          ></u-input>
+          <view class="time-row">
+            <text class="label">时长：</text>
+            <view class="time-input">
+              <u-input
+                v-model="form.mathMin"
+                type="number"
+                placeholder="分"
+                :disabled="!canEditMath || isLockedMath"
+                :border="false"
+                customStyle="border-bottom: 1px solid #f0f0f0;"
+              ></u-input>
+              <text>分</text>
+            </view>
+            <view class="time-input">
+              <u-input
+                v-model="form.mathSec"
+                type="number"
+                placeholder="秒"
+                :disabled="!canEditMath || isLockedMath"
+                :border="false"
+                customStyle="border-bottom: 1px solid #f0f0f0;"
+              ></u-input>
+              <text>秒</text>
+            </view>
+          </view>
+        </block>
         <view v-if="canEditMath || canUseRemedyMath" class="card-action-wrap">
           <view class="card-action-row">
             <view
@@ -713,6 +734,7 @@ const loadingMath = ref(false);
 const loadingClass = ref(false);
 const deleteLoading = ref(false);
 const showCompleteFeedback = ref(false);
+const MATH_PAGE_MODE_START_DATE = "2026-06-24";
 let completeFeedbackTimer = null;
 let completeAudio = null;
 
@@ -724,6 +746,8 @@ const form = reactive({
   readingStart: "",
   readingEnd: "",
   mathTitle: "",
+  mathStart: "",
+  mathEnd: "",
   mathMin: "",
   mathSec: "",
   classTitle: "",
@@ -762,6 +786,9 @@ const sumCovering = (batches, d) =>
 
 const currentDateStr = computed(() =>
   props.selectedDate ? formatDate(props.selectedDate) : ""
+);
+const isMathPageMode = computed(
+  () => currentDateStr.value >= MATH_PAGE_MODE_START_DATE
 );
 // 当前选中日期所在区间的可用张数（决定使用按钮是否出现）
 const currentExemptAvailable = computed(() =>
@@ -1287,10 +1314,22 @@ const formatTimeValue = (val) => {
   return str;
 };
 
+const parseMathPages = (title) => {
+  const match = String(title ?? "")
+    .trim()
+    .match(/^(\d+)\s*[-~－—到至]\s*(\d+)$/);
+  return match ? { start: match[1], end: match[2] } : { start: "", end: "" };
+};
+
+const buildMathPageTitle = () => `${form.mathStart}-${form.mathEnd}`;
+
 const populate = (record) => {
   form.readingStart = String(record?.reading_start ?? "");
   form.readingEnd = String(record?.reading_end ?? "");
   form.mathTitle = record?.math_title ?? "";
+  const mathPages = parseMathPages(record?.math_title);
+  form.mathStart = mathPages.start;
+  form.mathEnd = mathPages.end;
   form.mathMin = formatTimeValue(record?.math_min);
   form.mathSec = formatTimeValue(record?.math_sec);
   form.classTitle = record?.class_title ?? "";
@@ -1388,6 +1427,15 @@ const validateReading = () => {
 };
 
 const validateMath = () => {
+  if (isMathPageMode.value) {
+    if (!form.mathStart || !form.mathEnd)
+      return showError("请填写数学练习页码"), false;
+    if (!/^\d+$/.test(form.mathStart) || !/^\d+$/.test(form.mathEnd))
+      return showError("页码必须是数字"), false;
+    if (Number(form.mathEnd) <= Number(form.mathStart))
+      return showError("结束页码必须大于开始页码"), false;
+    return true;
+  }
   if (!form.mathTitle.trim()) return showError("请填写数学练习题目"), false;
   if (form.mathMin === "" || form.mathSec === "")
     return showError("请填写数学练习时长"), false;
@@ -1550,18 +1598,24 @@ const saveReading = () => {
 const saveMath = () => {
   if (!validateMath()) return;
   const wasRemedyEdit = !isEditable.value && editingMath.value;
+  const payload = {
+    method: "saveStudyRecord",
+    section: "math",
+    date: formatDate(props.selectedDate),
+    mathTitle: isMathPageMode.value ? buildMathPageTitle() : form.mathTitle,
+  };
+  if (isMathPageMode.value) {
+    payload.mathStart = form.mathStart;
+    payload.mathEnd = form.mathEnd;
+  } else {
+    payload.mathMin = form.mathMin;
+    payload.mathSec = form.mathSec;
+  }
   loadingMath.value = true;
   uni.request({
     url: `${Global.BASE_URL}/`,
     method: "POST",
-    data: {
-      method: "saveStudyRecord",
-      section: "math",
-      date: formatDate(props.selectedDate),
-      mathTitle: form.mathTitle,
-      mathMin: form.mathMin,
-      mathSec: form.mathSec,
-    },
+    data: payload,
     header: { "content-type": "application/x-www-form-urlencoded" },
     success: (res) => {
       if (responseOk(res)) {

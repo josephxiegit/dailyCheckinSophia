@@ -86,6 +86,17 @@ const formatDate = (date) => {
   return `${y}-${m}-${d}`;
 };
 
+const MATH_PAGE_MODE_START_DATE = "2026-06-24";
+
+const hasMathRecord = (dateStr, record) => {
+  if (!record?.math_title) return false;
+  if (dateStr >= MATH_PAGE_MODE_START_DATE) return true;
+  return (
+    (record.math_min || record.math_min === 0) &&
+    (record.math_sec || record.math_sec === 0)
+  );
+};
+
 // === 新增：加载后端的免除名单 ===
 const loadExclusions = () => {
   uni.request({
@@ -128,11 +139,7 @@ const syncDerivedState = () => {
     if (hasReading || isExcluded(dateStr, 'reading')) doneCount++;
 
     // 2. 数学（真完成 or 被免除）
-    const hasMath = record && !!(
-      record.math_title &&
-      (record.math_min || record.math_min === 0) &&
-      (record.math_sec || record.math_sec === 0)
-    );
+    const hasMath = hasMathRecord(dateStr, record);
     if (hasMath || isExcluded(dateStr, 'math')) doneCount++;
 
     // 3. 网课（真完成 or 被免除）
