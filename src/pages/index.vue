@@ -1,11 +1,13 @@
 <template>
   <view class="app-container">
+    <ScreenLock />
     <MyCalendar />
   </view>
 </template>
 
 <script setup>
 import MyCalendar from '@/components/MyCalendar/MyCalendar.vue';
+import ScreenLock from '@/components/ScreenLock/ScreenLock.vue';
 </script>
 
 <style lang="scss">

@@ -11,6 +11,7 @@ declare module 'vue' {
     InputEntry: typeof import('./src/components/MyCalendar/InputEntry.vue')['default']
     MyCalendar: typeof import('./src/components/MyCalendar/MyCalendar.vue')['default']
     RecordViewer: typeof import('./src/components/MyCalendar/RecordViewer.vue')['default']
+    ScreenLock: typeof import('./src/components/ScreenLock/ScreenLock.vue')['default']
     UButton: typeof import('uview-pro/components/u-button/u-button.vue')['default']
     UIcon: typeof import('uview-pro/components/u-icon/u-icon.vue')['default']
     UInput: typeof import('uview-pro/components/u-input/u-input.vue')['default']
