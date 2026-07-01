@@ -428,6 +428,13 @@ const rangeDates = ref([]);
 const exclusionsList = ref([]);
 const MATH_PAGE_MODE_START_DATE = "2026-06-24";
 
+const sortSavedRangesByDate = (ranges) =>
+  [...(ranges || [])].sort((a, b) => {
+    const startCompare = (a.startDate || "").localeCompare(b.startDate || "");
+    if (startCompare !== 0) return startCompare;
+    return (a.endDate || "").localeCompare(b.endDate || "");
+  });
+
 const formatMathRecord = (record) => {
   if (!record?.math_title) return "";
   if (record.date >= MATH_PAGE_MODE_START_DATE) return `${record.math_title}页`;
@@ -594,16 +601,16 @@ const loadSavedDateRange = () => {
     success: (res) => {
       if (res.data?.code === 0) {
         if (res.data.ranges && Array.isArray(res.data.ranges)) {
-          savedRanges.value = res.data.ranges;
+          savedRanges.value = sortSavedRangesByDate(res.data.ranges);
         } else if (res.data.startDate && res.data.endDate) {
-          savedRanges.value = [
+          savedRanges.value = sortSavedRangesByDate([
             {
               startDate: res.data.startDate,
               endDate: res.data.endDate,
               amount: res.data.amount ?? "",
               status: res.data.status || "",
             },
-          ];
+          ]);
         } else {
           savedRanges.value = [];
         }
@@ -691,7 +698,10 @@ const saveAndFetch = () => {
             amount: "",
             status: "",
           };
-          savedRanges.value.push(newRange);
+          savedRanges.value = sortSavedRangesByDate([
+            ...savedRanges.value,
+            newRange,
+          ]);
         }
       },
     });

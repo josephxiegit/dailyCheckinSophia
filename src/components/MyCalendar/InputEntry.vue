@@ -449,6 +449,54 @@
 
     <transition name="modal-anim">
       <view
+        v-if="showTypingConfirmDialog"
+        class="overlay typing-overlay"
+        @click="closeTypingConfirm"
+      >
+        <view class="typing-box" @click.stop>
+          <view class="pwd-title">保存确认</view>
+          <view class="typing-target">{{ typingConfirmTarget }}</view>
+          <view class="typing-display">
+            <text v-if="typingConfirmInput">{{ typingConfirmInput }}</text>
+            <text v-else class="typing-placeholder">请用下方键盘打一遍</text>
+          </view>
+          <view class="keyboard">
+            <view
+              v-for="(row, rowIndex) in keyboardRows"
+              :key="rowIndex"
+              class="keyboard-row"
+              :class="`keyboard-row--${rowIndex}`"
+            >
+              <view
+                v-for="key in row"
+                :key="`${rowIndex}-${key.value}`"
+                class="keyboard-key"
+                :class="{
+                  'keyboard-key--wide': key.type === 'wide',
+                  'keyboard-key--space': key.type === 'space',
+                  'keyboard-key--active':
+                    key.value === 'shift' && isKeyboardShifted,
+                }"
+                @click="pressKeyboardKey(key)"
+              >
+                {{ key.value.length === 1 && /[a-z]/.test(key.value)
+                  ? isKeyboardShifted
+                    ? key.label
+                    : key.value
+                  : key.label }}
+              </view>
+            </view>
+          </view>
+          <view class="btn-row">
+            <view class="btn-cancel" @click="closeTypingConfirm">取消</view>
+            <view class="btn-save" @click="confirmTypingSave">确认保存</view>
+          </view>
+        </view>
+      </view>
+    </transition>
+
+    <transition name="modal-anim">
+      <view
         v-if="showAddCouponDialog"
         class="overlay"
         @click="showAddCouponDialog = false"
@@ -776,6 +824,13 @@ const reducibleRemedyBatches = computed(() =>
 const isSameRange = (a, b) =>
   !!a && !!b && a.startDate === b.startDate && a.endDate === b.endDate;
 
+const sortSavedRangesByDate = (ranges) =>
+  [...(ranges || [])].sort((a, b) => {
+    const startCompare = (a.startDate || "").localeCompare(b.startDate || "");
+    if (startCompare !== 0) return startCompare;
+    return (a.endDate || "").localeCompare(b.endDate || "");
+  });
+
 // 汇总「区间覆盖某日期」的剩余张数
 const sumCovering = (batches, d) =>
   (batches || []).reduce(
@@ -812,6 +867,28 @@ const classRemedyUsedAt = ref("");
 const showPwdDialog = ref(false);
 const pwdInput = ref("");
 let pwdSuccessCallback = null;
+
+const showTypingConfirmDialog = ref(false);
+const typingConfirmTarget = ref("");
+const typingConfirmInput = ref("");
+const isKeyboardShifted = ref(false);
+let typingConfirmCallback = null;
+const letterKeys = (chars) =>
+  chars.split("").map((char) => ({ label: char.toUpperCase(), value: char }));
+const keyboardRows = [
+  "1234567890".split("").map((char) => ({ label: char, value: char })),
+  letterKeys("qwertyuiop"),
+  letterKeys("asdfghjkl"),
+  [
+    { label: "Shift", value: "shift", type: "wide" },
+    ...letterKeys("zxcvbnm"),
+    { label: "⌫", value: "backspace", type: "wide" },
+  ],
+  [
+    { label: "Space", value: " ", type: "space" },
+    { label: "Clear", value: "clear", type: "wide" },
+  ],
+];
 
 const showAddCouponDialog = ref(false);
 const addCouponCount = ref("");
@@ -855,6 +932,58 @@ const verifyPwd = () => {
     }
   } else {
     uni.showToast({ title: "密码错误", icon: "none" });
+  }
+};
+
+const normalizeTypingText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const requireTypingConfirm = (target, callback) => {
+  typingConfirmTarget.value = target;
+  typingConfirmInput.value = "";
+  isKeyboardShifted.value = false;
+  typingConfirmCallback = callback;
+  showTypingConfirmDialog.value = true;
+};
+
+const closeTypingConfirm = () => {
+  showTypingConfirmDialog.value = false;
+  typingConfirmCallback = null;
+};
+
+const pressKeyboardKey = (key) => {
+  if (key.value === "shift") {
+    isKeyboardShifted.value = !isKeyboardShifted.value;
+    return;
+  }
+  if (key.value === "backspace") {
+    typingConfirmInput.value = typingConfirmInput.value.slice(0, -1);
+    return;
+  }
+  if (key.value === "clear") {
+    typingConfirmInput.value = "";
+    return;
+  }
+  const typed =
+    isKeyboardShifted.value && /^[a-z]$/.test(key.value)
+      ? key.value.toUpperCase()
+      : key.value;
+  typingConfirmInput.value += typed;
+};
+
+const confirmTypingSave = () => {
+  const expected = normalizeTypingText(typingConfirmTarget.value);
+  const actual = normalizeTypingText(typingConfirmInput.value);
+  if (actual !== expected) {
+    uni.showToast({ title: "输入不一致，不能保存", icon: "none" });
+    return;
+  }
+  showTypingConfirmDialog.value = false;
+  if (typingConfirmCallback) {
+    typingConfirmCallback();
+    typingConfirmCallback = null;
   }
 };
 
@@ -1063,7 +1192,7 @@ const loadSavedRanges = () => {
     success: (res) => {
       if (res.data?.code === 0) {
         savedRanges.value = Array.isArray(res.data.ranges)
-          ? res.data.ranges
+          ? sortSavedRangesByDate(res.data.ranges)
           : [];
       }
     },
@@ -1421,8 +1550,8 @@ const validateReading = () => {
     return showError("请填写英语阅读页码"), false;
   if (!/^\d+$/.test(form.readingStart) || !/^\d+$/.test(form.readingEnd))
     return showError("页码必须是数字"), false;
-  if (Number(form.readingEnd) <= Number(form.readingStart))
-    return showError("结束页码必须大于开始页码"), false;
+  if (Number(form.readingEnd) < Number(form.readingStart))
+    return showError("结束页码不能小于开始页码"), false;
   return true;
 };
 
@@ -1432,8 +1561,8 @@ const validateMath = () => {
       return showError("请填写数学练习页码"), false;
     if (!/^\d+$/.test(form.mathStart) || !/^\d+$/.test(form.mathEnd))
       return showError("页码必须是数字"), false;
-    if (Number(form.mathEnd) <= Number(form.mathStart))
-      return showError("结束页码必须大于开始页码"), false;
+    if (Number(form.mathEnd) < Number(form.mathStart))
+      return showError("结束页码不能小于开始页码"), false;
     return true;
   }
   if (!form.mathTitle.trim()) return showError("请填写数学练习题目"), false;
@@ -1563,6 +1692,10 @@ const onRevokeClick = (sectionName) => {
 
 const saveReading = () => {
   if (!validateReading()) return;
+  requireTypingConfirm("English reading", executeSaveReading);
+};
+
+const executeSaveReading = () => {
   const wasRemedyEdit = !isEditable.value && editingReading.value;
   loadingReading.value = true;
   uni.request({
@@ -1597,6 +1730,10 @@ const saveReading = () => {
 
 const saveMath = () => {
   if (!validateMath()) return;
+  requireTypingConfirm("maths", executeSaveMath);
+};
+
+const executeSaveMath = () => {
   const wasRemedyEdit = !isEditable.value && editingMath.value;
   const payload = {
     method: "saveStudyRecord",
@@ -1638,6 +1775,10 @@ const saveMath = () => {
 
 const saveClass = () => {
   if (!validateClass()) return;
+  requireTypingConfirm("online lesson", executeSaveClass);
+};
+
+const executeSaveClass = () => {
   const wasRemedyEdit = !isEditable.value && editingClass.value;
   loadingClass.value = true;
   uni.request({
@@ -2081,6 +2222,95 @@ onUnmounted(() => {
   text-align: center;
   width: 100%;
   box-sizing: border-box;
+}
+.typing-box {
+  background: #fff;
+  width: 100%;
+  max-width: none;
+  max-height: 96vh;
+  overflow-y: auto;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 18px 10px 16px;
+  box-sizing: border-box;
+  box-shadow: 0 -10rpx 30rpx rgba(0, 0, 0, 0.16);
+}
+.typing-overlay {
+  align-items: flex-end;
+  padding: 0;
+}
+.typing-target {
+  color: #111;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  margin-bottom: 10px;
+  word-break: break-word;
+}
+.typing-display {
+  min-height: 44px;
+  border: 2rpx solid #e6e6e6;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #333;
+  font-size: 20px;
+  line-height: 1.35;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  text-align: center;
+  word-break: break-word;
+}
+.typing-placeholder {
+  color: #aaa;
+}
+.keyboard {
+  width: 100%;
+  max-width: 1024px;
+  margin: 16px auto 0;
+}
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(5px, 1vw, 12px);
+  margin-bottom: clamp(7px, 1.2vw, 12px);
+}
+.keyboard-row--2 {
+  padding: 0 clamp(15px, 4vw, 46px);
+}
+.keyboard-row--3 {
+  padding: 0 clamp(3px, 1vw, 14px);
+}
+.keyboard-key {
+  flex: 0 1 calc((100% - 9 * clamp(5px, 1vw, 12px)) / 10);
+  min-width: 0;
+  height: clamp(46px, 8.4vw, 72px);
+  border: 1rpx solid #d9d9d9;
+  border-radius: clamp(7px, 1.4vw, 13px);
+  background: #fff;
+  color: #333;
+  font-size: clamp(20px, 4vw, 31px);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  box-shadow: 0 3rpx 0 #d8d8d8;
+}
+.keyboard-key:active,
+.keyboard-key--active {
+  background: #f0f0f0;
+  transform: translateY(2rpx);
+  box-shadow: 0 1rpx 0 #d8d8d8;
+}
+.keyboard-key--wide {
+  flex-basis: calc(
+    (100% - 9 * clamp(5px, 1vw, 12px)) / 10 * 1.45
+  );
+  font-size: clamp(14px, 2.6vw, 22px);
+}
+.keyboard-key--space {
+  flex: 1 1 58vw;
+  max-width: 620px;
 }
 /* === 发放弹窗：常用时间区间选择 === */
 .range-select-label {

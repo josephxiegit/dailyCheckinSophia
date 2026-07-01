@@ -338,7 +338,7 @@ class DailyCheckinAPIView(APIView):
                     savedDateRange.objects
                     .using('checkindb')
                     .all()
-                    .order_by('start_date')
+                    .order_by('start_date', 'end_date')
                     .values('start_date', 'end_date', 'amount', 'status')
                 )
                 result = []
