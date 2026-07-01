@@ -455,7 +455,13 @@
       >
         <view class="typing-box" @click.stop>
           <view class="pwd-title">保存确认</view>
-          <view class="typing-target">{{ typingConfirmTarget }}</view>
+          <view class="typing-target-row">
+            <view class="typing-target">{{ typingConfirmTarget }}</view>
+            <view class="typing-speaker" @click.stop="speakTypingTarget(typingConfirmTarget)">
+              🔊
+            </view>
+          </view>
+          <view class="typing-target-cn">{{ typingConfirmChinese }}</view>
           <view class="typing-display">
             <text v-if="typingConfirmInput">{{ typingConfirmInput }}</text>
             <text v-else class="typing-placeholder">请用下方键盘打一遍</text>
@@ -870,9 +876,17 @@ let pwdSuccessCallback = null;
 
 const showTypingConfirmDialog = ref(false);
 const typingConfirmTarget = ref("");
+const typingConfirmChinese = ref("");
 const typingConfirmInput = ref("");
 const isKeyboardShifted = ref(false);
 let typingConfirmCallback = null;
+let typingAudio = null;
+let typingAudioTimer = null;
+const typingConfirmChineseMap = {
+  "English reading": "英语阅读",
+  maths: "数学",
+  "online lesson": "英语网课",
+};
 const letterKeys = (chars) =>
   chars.split("").map((char) => ({ label: char.toUpperCase(), value: char }));
 const keyboardRows = [
@@ -940,16 +954,52 @@ const normalizeTypingText = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
+const stopTypingAudio = () => {
+  if (typingAudioTimer) {
+    clearTimeout(typingAudioTimer);
+    typingAudioTimer = null;
+  }
+  if (!typingAudio) return;
+  if (typeof typingAudio.pause === "function") typingAudio.pause();
+  typingAudio.currentTime = 0;
+  typingAudio = null;
+};
+
+const speakTypingTarget = (english, delay = 0, afterSpeak) => {
+  stopTypingAudio();
+  typingAudioTimer = setTimeout(() => {
+    typingAudioTimer = null;
+    const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(
+      english
+    )}&type=1`;
+    const audio = new Audio(url);
+    typingAudio = audio;
+    audio.onended = () => {
+      if (typingAudio === audio) typingAudio = null;
+      if (afterSpeak) afterSpeak();
+    };
+    audio.onerror = () => {
+      if (typingAudio === audio) typingAudio = null;
+      if (afterSpeak) afterSpeak();
+    };
+    audio.play();
+  }, delay);
+};
+
 const requireTypingConfirm = (target, callback) => {
+  stopTypingAudio();
   typingConfirmTarget.value = target;
+  typingConfirmChinese.value = typingConfirmChineseMap[target] || "";
   typingConfirmInput.value = "";
   isKeyboardShifted.value = false;
   typingConfirmCallback = callback;
   showTypingConfirmDialog.value = true;
+  speakTypingTarget(target, 420);
 };
 
 const closeTypingConfirm = () => {
   showTypingConfirmDialog.value = false;
+  stopTypingAudio();
   typingConfirmCallback = null;
 };
 
@@ -981,10 +1031,12 @@ const confirmTypingSave = () => {
     return;
   }
   showTypingConfirmDialog.value = false;
-  if (typingConfirmCallback) {
-    typingConfirmCallback();
-    typingConfirmCallback = null;
-  }
+  const callback = typingConfirmCallback;
+  const target = typingConfirmTarget.value;
+  typingConfirmCallback = null;
+  speakTypingTarget(target, 360, () => {
+    if (callback) callback();
+  });
 };
 
 const onAddCouponClick = () => {
@@ -2238,14 +2290,45 @@ onUnmounted(() => {
   align-items: flex-end;
   padding: 0;
 }
+.typing-target-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 34px;
+  margin-bottom: 4px;
+}
 .typing-target {
   color: #111;
   font-size: 26px;
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
-  margin-bottom: 10px;
   word-break: break-word;
+}
+.typing-speaker {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: #f2f2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  flex: 0 0 40px;
+}
+.typing-speaker:active {
+  background: #e5e5ea;
+  transform: scale(0.96);
+}
+.typing-target-cn {
+  color: #666;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  margin-bottom: 12px;
 }
 .typing-display {
   min-height: 44px;
@@ -2460,6 +2543,12 @@ onUnmounted(() => {
 .modal-anim-leave-active .log-box {
   animation: popOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
 }
+.modal-anim-enter-active .typing-box {
+  animation: keyboardSlideIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+.modal-anim-leave-active .typing-box {
+  animation: keyboardSlideOut 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
 
 @keyframes fadeIn {
   0% {
@@ -2475,6 +2564,26 @@ onUnmounted(() => {
   }
   100% {
     opacity: 0;
+  }
+}
+@keyframes keyboardSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes keyboardSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100%);
   }
 }
 @keyframes popIn {
